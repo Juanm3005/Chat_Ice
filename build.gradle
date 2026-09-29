@@ -1,0 +1,46 @@
+allprojects {
+    repositories {
+        mavenCentral ()
+    }
+}
+
+
+group = 'org.example'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+
+allprojects {
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+
+    java {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    dependencies {
+        // Runtime oficial de ZeroC Ice para Java
+        implementation 'com.zeroc:ice:3.7.10'
+    }
+}
+
+subprojects {
+    apply plugin : 'java'
+    java {sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility= JavaVersion.VERSION_17
+    }
+    dependencies {
+// Runtime oficial de ZeroC Ice para Java
+        implementation 'com.zeroc:ice:3.7.10'
+    }
+}
+
