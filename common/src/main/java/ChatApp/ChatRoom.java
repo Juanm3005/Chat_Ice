@@ -29,6 +29,20 @@ public interface ChatRoom extends com.zeroc.Ice.Object
 
     void logout(String nickname, com.zeroc.Ice.Current current);
 
+    String startUpload(String fileName, String nickname, com.zeroc.Ice.Current current)
+        throws ChatException;
+
+    void writeChunk(String sessionId, byte[] chunk, com.zeroc.Ice.Current current);
+
+    void closeUpload(String sessionId, com.zeroc.Ice.Current current);
+
+    String startDownload(String fileName, String nickname, com.zeroc.Ice.Current current)
+        throws ChatException;
+
+    byte[] readChunk(String sessionId, long offset, long size, com.zeroc.Ice.Current current);
+
+    void closeDownload(String sessionId, com.zeroc.Ice.Current current);
+
     /** @hidden */
     static final String[] _iceIds =
     {
@@ -154,9 +168,142 @@ public interface ChatRoom extends com.zeroc.Ice.Object
         return inS.setResult(inS.writeEmptyParams());
     }
 
+    /**
+     * @hidden
+     * @param obj -
+     * @param inS -
+     * @param current -
+     * @return -
+     * @throws com.zeroc.Ice.UserException -
+    **/
+    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_startUpload(ChatRoom obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
+        throws com.zeroc.Ice.UserException
+    {
+        com.zeroc.Ice.Object._iceCheckMode(null, current.mode);
+        com.zeroc.Ice.InputStream istr = inS.startReadParams();
+        String iceP_fileName;
+        String iceP_nickname;
+        iceP_fileName = istr.readString();
+        iceP_nickname = istr.readString();
+        inS.endReadParams();
+        String ret = obj.startUpload(iceP_fileName, iceP_nickname, current);
+        com.zeroc.Ice.OutputStream ostr = inS.startWriteParams();
+        ostr.writeString(ret);
+        inS.endWriteParams(ostr);
+        return inS.setResult(ostr);
+    }
+
+    /**
+     * @hidden
+     * @param obj -
+     * @param inS -
+     * @param current -
+     * @return -
+    **/
+    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_writeChunk(ChatRoom obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
+    {
+        com.zeroc.Ice.Object._iceCheckMode(null, current.mode);
+        com.zeroc.Ice.InputStream istr = inS.startReadParams();
+        String iceP_sessionId;
+        byte[] iceP_chunk;
+        iceP_sessionId = istr.readString();
+        iceP_chunk = istr.readByteSeq();
+        inS.endReadParams();
+        obj.writeChunk(iceP_sessionId, iceP_chunk, current);
+        return inS.setResult(inS.writeEmptyParams());
+    }
+
+    /**
+     * @hidden
+     * @param obj -
+     * @param inS -
+     * @param current -
+     * @return -
+    **/
+    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_closeUpload(ChatRoom obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
+    {
+        com.zeroc.Ice.Object._iceCheckMode(null, current.mode);
+        com.zeroc.Ice.InputStream istr = inS.startReadParams();
+        String iceP_sessionId;
+        iceP_sessionId = istr.readString();
+        inS.endReadParams();
+        obj.closeUpload(iceP_sessionId, current);
+        return inS.setResult(inS.writeEmptyParams());
+    }
+
+    /**
+     * @hidden
+     * @param obj -
+     * @param inS -
+     * @param current -
+     * @return -
+     * @throws com.zeroc.Ice.UserException -
+    **/
+    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_startDownload(ChatRoom obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
+        throws com.zeroc.Ice.UserException
+    {
+        com.zeroc.Ice.Object._iceCheckMode(null, current.mode);
+        com.zeroc.Ice.InputStream istr = inS.startReadParams();
+        String iceP_fileName;
+        String iceP_nickname;
+        iceP_fileName = istr.readString();
+        iceP_nickname = istr.readString();
+        inS.endReadParams();
+        String ret = obj.startDownload(iceP_fileName, iceP_nickname, current);
+        com.zeroc.Ice.OutputStream ostr = inS.startWriteParams();
+        ostr.writeString(ret);
+        inS.endWriteParams(ostr);
+        return inS.setResult(ostr);
+    }
+
+    /**
+     * @hidden
+     * @param obj -
+     * @param inS -
+     * @param current -
+     * @return -
+    **/
+    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_readChunk(ChatRoom obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
+    {
+        com.zeroc.Ice.Object._iceCheckMode(null, current.mode);
+        com.zeroc.Ice.InputStream istr = inS.startReadParams();
+        String iceP_sessionId;
+        long iceP_offset;
+        long iceP_size;
+        iceP_sessionId = istr.readString();
+        iceP_offset = istr.readLong();
+        iceP_size = istr.readLong();
+        inS.endReadParams();
+        byte[] ret = obj.readChunk(iceP_sessionId, iceP_offset, iceP_size, current);
+        com.zeroc.Ice.OutputStream ostr = inS.startWriteParams();
+        ostr.writeByteSeq(ret);
+        inS.endWriteParams(ostr);
+        return inS.setResult(ostr);
+    }
+
+    /**
+     * @hidden
+     * @param obj -
+     * @param inS -
+     * @param current -
+     * @return -
+    **/
+    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_closeDownload(ChatRoom obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
+    {
+        com.zeroc.Ice.Object._iceCheckMode(null, current.mode);
+        com.zeroc.Ice.InputStream istr = inS.startReadParams();
+        String iceP_sessionId;
+        iceP_sessionId = istr.readString();
+        inS.endReadParams();
+        obj.closeDownload(iceP_sessionId, current);
+        return inS.setResult(inS.writeEmptyParams());
+    }
+
     /** @hidden */
     final static String[] _iceOps =
     {
+        "closeDownload",
+        "closeUpload",
         "getOnlineUsers",
         "getPendingMessages",
         "ice_id",
@@ -165,7 +312,11 @@ public interface ChatRoom extends com.zeroc.Ice.Object
         "ice_ping",
         "login",
         "logout",
-        "postMessage"
+        "postMessage",
+        "readChunk",
+        "startDownload",
+        "startUpload",
+        "writeChunk"
     };
 
     /** @hidden */
@@ -183,39 +334,63 @@ public interface ChatRoom extends com.zeroc.Ice.Object
         {
             case 0:
             {
-                return _iceD_getOnlineUsers(this, in, current);
+                return _iceD_closeDownload(this, in, current);
             }
             case 1:
             {
-                return _iceD_getPendingMessages(this, in, current);
+                return _iceD_closeUpload(this, in, current);
             }
             case 2:
             {
-                return com.zeroc.Ice.Object._iceD_ice_id(this, in, current);
+                return _iceD_getOnlineUsers(this, in, current);
             }
             case 3:
             {
-                return com.zeroc.Ice.Object._iceD_ice_ids(this, in, current);
+                return _iceD_getPendingMessages(this, in, current);
             }
             case 4:
             {
-                return com.zeroc.Ice.Object._iceD_ice_isA(this, in, current);
+                return com.zeroc.Ice.Object._iceD_ice_id(this, in, current);
             }
             case 5:
             {
-                return com.zeroc.Ice.Object._iceD_ice_ping(this, in, current);
+                return com.zeroc.Ice.Object._iceD_ice_ids(this, in, current);
             }
             case 6:
             {
-                return _iceD_login(this, in, current);
+                return com.zeroc.Ice.Object._iceD_ice_isA(this, in, current);
             }
             case 7:
             {
-                return _iceD_logout(this, in, current);
+                return com.zeroc.Ice.Object._iceD_ice_ping(this, in, current);
             }
             case 8:
             {
+                return _iceD_login(this, in, current);
+            }
+            case 9:
+            {
+                return _iceD_logout(this, in, current);
+            }
+            case 10:
+            {
                 return _iceD_postMessage(this, in, current);
+            }
+            case 11:
+            {
+                return _iceD_readChunk(this, in, current);
+            }
+            case 12:
+            {
+                return _iceD_startDownload(this, in, current);
+            }
+            case 13:
+            {
+                return _iceD_startUpload(this, in, current);
+            }
+            case 14:
+            {
+                return _iceD_writeChunk(this, in, current);
             }
         }
 

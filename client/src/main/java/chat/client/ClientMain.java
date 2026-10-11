@@ -7,6 +7,9 @@ import com.zeroc.Ice.Communicator;
 import com.zeroc.Ice.ObjectPrx;
 import com.zeroc.Ice.Util;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.util.Arrays;
 import java.util.Scanner;
 
 public class ClientMain {
@@ -34,7 +37,8 @@ public class ClientMain {
             while (true) {
                 System.out.print("Ingrese su nickname: ");
                 nickname = scanner.nextLine().trim();
-                if (nickname.isEmpty()) continue;
+                if (nickname.isEmpty())
+                    continue;
                 try {
                     chatPrx.login(nickname);
                     System.out.println(">>> Autenticado correctamente como '" + nickname + "'.");
@@ -48,7 +52,8 @@ public class ClientMain {
 
             final String activeUser = nickname;
 
-            // 3. Hilo demonio en segundo plano: Sondeo continuo de mensajes (Polling no bloqueante)
+            // 3. Hilo demonio en segundo plano: Sondeo continuo de mensajes (Polling no
+            // bloqueante)
             Thread listenerThread = new Thread(() -> {
                 while (running) {
                     try {
@@ -85,7 +90,8 @@ public class ClientMain {
                     running = false;
                     try {
                         chatPrx.logout(activeUser);
-                    } catch (Exception ignored) {}
+                    } catch (Exception ignored) {
+                    }
                     System.out.println(">>> Sesion cerrada satisfactoriamente. Hasta pronto!");
                     break;
                 } else if (input.equalsIgnoreCase("/users")) {
@@ -95,6 +101,13 @@ public class ClientMain {
                                 users));
                     } catch (Exception e) {
                         System.err.println("[ERROR] No se pudo obtener la lista de usuarios: " + e.getMessage());
+                    }
+                } else if (input.startsWith("/upload")) {
+                    String filePath = input.substring(8).trim();
+                    if (!filePath.isEmpty()) {
+                        uploadFile(chatPrx, activeUser, filePath);
+                    } else {
+                        System.out.println(" || Debes usar la sigueinte estructura: /upload<ruta_del_archivo>");
                     }
                 } else if (!input.isEmpty()) {
                     try {
@@ -111,4 +124,36 @@ public class ClientMain {
             System.err.println("[ERROR FATAL] " + e.getMessage());
         }
     }
+
+    private static void uploadFile(ChatRoomPrx chatPrx, String nickname, String pathStr) {
+        File file = new File(pathStr);
+        if (!file.exists() || !file.isFile()) {
+            System.err.println("[ERROR] El archivo no existe o no es valido: " + pathStr);
+            return;
+        }
+
+        System.out.println(">>> Subiendo " + file.getName() + " (" + file.length() + " bytes)...");
+
+        try (FileInputStream fis = new FileInputStream(file)) {
+            String sessionId = chatPrx.startUpload(file.getName(), nickname);
+
+            byte[] buffer = new byte[32 * 1024];
+            int bytesRead;
+            while ((bytesRead = fis.read(buffer)) != -1) {
+                byte[] chunk = (bytesRead == buffer.length) ? buffer : Arrays.copyOf(buffer, bytesRead);
+                chatPrx.writeChunk(sessionId, chunk);
+            }
+
+            chatPrx.closeUpload(sessionId);
+            System.out.println(">>> Archivo '" + file.getName() + "' subido con exito.");
+
+        } catch (
+
+        ChatException ce) {
+            System.err.println("[RECHAZADO] " + ce.reason);
+        } catch (Exception e) {
+            System.err.println("[ERROR SUBIDA] " + e.getMessage());
+        }
+    }
+
 }
