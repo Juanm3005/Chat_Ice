@@ -6,6 +6,7 @@ import ChatApp.ChatRoom;
 import com.zeroc.Ice.Current;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -22,6 +23,7 @@ public class ChatRoomI implements ChatApp.ChatRoom {
 
     private final File storageDir = new File("chat_files");
     private final Map<String, UploadSession> activeUploads = new ConcurrentHashMap<>();
+    private final Map<String, DownloadSession> activeDownloads = new ConcurrentHashMap<>();
 
     @Override
     public synchronized void login(String nickname, Current current) throws ChatException {
@@ -102,7 +104,8 @@ public class ChatRoomI implements ChatApp.ChatRoom {
             activeUploads.put(sessionId, new UploadSession(safeName, nickname, fos));
 
             System.out.println(
-                    "[UPLOAD] Iniciando subida de: " + safeName + " por " + nickname + " (Sesion: " + sessionId + ")");
+                    "[UPLOAD] Iniciando subida de: " + safeName + " por " + nickname + " (Sesion: " + sessionId
+                            + ") (para descargar e archivo usa /download<nombre_del_archivo>)");
             return sessionId;
 
         } catch (Exception e) {
@@ -145,16 +148,50 @@ public class ChatRoomI implements ChatApp.ChatRoom {
 
     @Override
     public String startDownload(String fileName, String nickname, Current current) throws ChatException {
-        throw new ChatException("Descarga no implementada aun");
+
+        try {
+
+            if (!onlineUsers.contains(nickname)) {
+                throw new ChatException("Acceso denegado");
+            }
+            String safeName = new File(fileName).getName();
+            File destFile = new File(storageDir, safeName);
+            FileInputStream fis = new FileInputStream(destFile);
+
+            String sessionId = UUID.randomUUID().toString();
+            activeDownloads.put(sessionId, new DownloadSession(safeName, nickname, fis));
+            return sessionId;
+
+        } catch (Exception e) {
+            throw new ChatException("Error al preparar descarga en el servidor: " + e.getMessage());
+        }
+
     }
 
     @Override
     public byte[] readChunk(String sessionId, long offset, long size, Current current) {
+        DownloadSession session = activeDownloads.get(sessionId);
+        if (session != null) {
+            try {
+                return session.inputStream.readNBytes((int) size);
+            } catch (Exception e) {
+                System.err.println("[ERROR DOWNLOAD] Fallo leyendo bloque: " + e.getMessage());
+            }
+        }
         return new byte[0];
     }
 
     @Override
     public void closeDownload(String sessionId, Current current) {
+        DownloadSession session = activeDownloads.remove(sessionId);
+        if (session != null) {
+            try {
+                session.inputStream.close();
+                System.out.println("[DOWNLOAD] Archivo completado: " + session.fileName);
+            } catch (Exception e) {
+                System.err.println("[ERROR DOWNLOAD] Error cerrando el archivo: " + e.getMessage());
+            }
+        }
     }
 
 }

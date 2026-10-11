@@ -9,6 +9,7 @@ import com.zeroc.Ice.Util;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.util.Arrays;
 import java.util.Scanner;
 
@@ -109,6 +110,13 @@ public class ClientMain {
                     } else {
                         System.out.println(" || Debes usar la sigueinte estructura: /upload<ruta_del_archivo>");
                     }
+                } else if (input.startsWith("/download")) {
+                    String fileName = input.substring(10).trim();
+                    if (!fileName.isEmpty()) {
+                        downloadFile(chatPrx, activeUser, fileName);
+                    } else {
+                        System.out.println(" || Debes usar la sigueinte estructura: /download<ruta_del_archivo>");
+                    }
                 } else if (!input.isEmpty()) {
                     try {
                         chatPrx.postMessage(activeUser, input);
@@ -153,6 +161,41 @@ public class ClientMain {
             System.err.println("[RECHAZADO] " + ce.reason);
         } catch (Exception e) {
             System.err.println("[ERROR SUBIDA] " + e.getMessage());
+        }
+    }
+
+    public static void downloadFile(ChatRoomPrx chatPrx, String nickname, String fileName) {
+        try {
+
+            String sessionId = chatPrx.startDownload(fileName, nickname);
+            File downloadDir = new File("downloads");
+            if (!downloadDir.exists()) {
+                downloadDir.mkdirs();
+            }
+
+            File localFile = new File(downloadDir, fileName);
+            System.out.println(">>> Descargando '" + fileName + "'...");
+
+            try (FileOutputStream fos = new FileOutputStream(localFile)) {
+                long offset = 0;
+                int chunkSize = 32 * 1024;
+
+                while (true) {
+                    byte[] chunk = chatPrx.readChunk(sessionId, offset, chunkSize);
+                    if (chunk == null || chunk.length == 0) {
+                        break;
+                    }
+                    fos.write(chunk);
+                    offset += chunk.length;
+                }
+                chatPrx.closeDownload(sessionId);
+                System.out.println(">>> Archivo guardado con exito en: " + localFile.getPath());
+            }
+
+        } catch (ChatException ce) {
+            System.err.println("[ERROR DESCARGA] " + ce.reason);
+        } catch (Exception e) {
+            System.err.println("[ERROR RED] " + e.getMessage());
         }
     }
 
