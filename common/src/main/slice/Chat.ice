@@ -16,6 +16,9 @@ module ChatApp {
         string reason;
     };
 
+   // Archivos multimedia
+   sequence<byte> ByteSeq;
+
     // Interfaz remota provista por el servidor Ice
     interface ChatRoom {
         // Registra un usuario; falla si el nickname ya existe
@@ -32,5 +35,14 @@ module ChatApp {
 
         // Cierra sesion y desvincula al usuario
         void logout(string nickname);
+
+        // Envir archivos
+        string startUpload(string fileName, string nickname) throws ChatException;
+        void writeChunk(string sessionId, ByteSeq chunk);
+        void closeUpload(string sessionId);
+        // Download
+        string startDownload(string fileName, string nickname) throws ChatException;
+        ByteSeq readChunk(string sessionId, long offset, long size);
+        void closeDownload(string sessionId);
     };
 };

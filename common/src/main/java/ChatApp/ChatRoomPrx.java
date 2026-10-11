@@ -244,6 +244,282 @@ public interface ChatRoomPrx extends com.zeroc.Ice.ObjectPrx
         return f;
     }
 
+    default String startUpload(String fileName, String nickname)
+        throws ChatException
+    {
+        return startUpload(fileName, nickname, com.zeroc.Ice.ObjectPrx.noExplicitContext);
+    }
+
+    default String startUpload(String fileName, String nickname, java.util.Map<String, String> context)
+        throws ChatException
+    {
+        try
+        {
+            return _iceI_startUploadAsync(fileName, nickname, context, true).waitForResponseOrUserEx();
+        }
+        catch(ChatException ex)
+        {
+            throw ex;
+        }
+        catch(com.zeroc.Ice.UserException ex)
+        {
+            throw new com.zeroc.Ice.UnknownUserException(ex.ice_id(), ex);
+        }
+    }
+
+    default java.util.concurrent.CompletableFuture<java.lang.String> startUploadAsync(String fileName, String nickname)
+    {
+        return _iceI_startUploadAsync(fileName, nickname, com.zeroc.Ice.ObjectPrx.noExplicitContext, false);
+    }
+
+    default java.util.concurrent.CompletableFuture<java.lang.String> startUploadAsync(String fileName, String nickname, java.util.Map<String, String> context)
+    {
+        return _iceI_startUploadAsync(fileName, nickname, context, false);
+    }
+
+    /**
+     * @hidden
+     * @param iceP_fileName -
+     * @param iceP_nickname -
+     * @param context -
+     * @param sync -
+     * @return -
+     **/
+    default com.zeroc.IceInternal.OutgoingAsync<java.lang.String> _iceI_startUploadAsync(String iceP_fileName, String iceP_nickname, java.util.Map<String, String> context, boolean sync)
+    {
+        com.zeroc.IceInternal.OutgoingAsync<java.lang.String> f = new com.zeroc.IceInternal.OutgoingAsync<>(this, "startUpload", null, sync, _iceE_startUpload);
+        f.invoke(true, context, null, ostr -> {
+                     ostr.writeString(iceP_fileName);
+                     ostr.writeString(iceP_nickname);
+                 }, istr -> {
+                     String ret;
+                     ret = istr.readString();
+                     return ret;
+                 });
+        return f;
+    }
+
+    /** @hidden */
+    static final Class<?>[] _iceE_startUpload =
+    {
+        ChatException.class
+    };
+
+    default void writeChunk(String sessionId, byte[] chunk)
+    {
+        writeChunk(sessionId, chunk, com.zeroc.Ice.ObjectPrx.noExplicitContext);
+    }
+
+    default void writeChunk(String sessionId, byte[] chunk, java.util.Map<String, String> context)
+    {
+        _iceI_writeChunkAsync(sessionId, chunk, context, true).waitForResponse();
+    }
+
+    default java.util.concurrent.CompletableFuture<Void> writeChunkAsync(String sessionId, byte[] chunk)
+    {
+        return _iceI_writeChunkAsync(sessionId, chunk, com.zeroc.Ice.ObjectPrx.noExplicitContext, false);
+    }
+
+    default java.util.concurrent.CompletableFuture<Void> writeChunkAsync(String sessionId, byte[] chunk, java.util.Map<String, String> context)
+    {
+        return _iceI_writeChunkAsync(sessionId, chunk, context, false);
+    }
+
+    /**
+     * @hidden
+     * @param iceP_sessionId -
+     * @param iceP_chunk -
+     * @param context -
+     * @param sync -
+     * @return -
+     **/
+    default com.zeroc.IceInternal.OutgoingAsync<Void> _iceI_writeChunkAsync(String iceP_sessionId, byte[] iceP_chunk, java.util.Map<String, String> context, boolean sync)
+    {
+        com.zeroc.IceInternal.OutgoingAsync<Void> f = new com.zeroc.IceInternal.OutgoingAsync<>(this, "writeChunk", null, sync, null);
+        f.invoke(false, context, null, ostr -> {
+                     ostr.writeString(iceP_sessionId);
+                     ostr.writeByteSeq(iceP_chunk);
+                 }, null);
+        return f;
+    }
+
+    default void closeUpload(String sessionId)
+    {
+        closeUpload(sessionId, com.zeroc.Ice.ObjectPrx.noExplicitContext);
+    }
+
+    default void closeUpload(String sessionId, java.util.Map<String, String> context)
+    {
+        _iceI_closeUploadAsync(sessionId, context, true).waitForResponse();
+    }
+
+    default java.util.concurrent.CompletableFuture<Void> closeUploadAsync(String sessionId)
+    {
+        return _iceI_closeUploadAsync(sessionId, com.zeroc.Ice.ObjectPrx.noExplicitContext, false);
+    }
+
+    default java.util.concurrent.CompletableFuture<Void> closeUploadAsync(String sessionId, java.util.Map<String, String> context)
+    {
+        return _iceI_closeUploadAsync(sessionId, context, false);
+    }
+
+    /**
+     * @hidden
+     * @param iceP_sessionId -
+     * @param context -
+     * @param sync -
+     * @return -
+     **/
+    default com.zeroc.IceInternal.OutgoingAsync<Void> _iceI_closeUploadAsync(String iceP_sessionId, java.util.Map<String, String> context, boolean sync)
+    {
+        com.zeroc.IceInternal.OutgoingAsync<Void> f = new com.zeroc.IceInternal.OutgoingAsync<>(this, "closeUpload", null, sync, null);
+        f.invoke(false, context, null, ostr -> {
+                     ostr.writeString(iceP_sessionId);
+                 }, null);
+        return f;
+    }
+
+    default String startDownload(String fileName, String nickname)
+        throws ChatException
+    {
+        return startDownload(fileName, nickname, com.zeroc.Ice.ObjectPrx.noExplicitContext);
+    }
+
+    default String startDownload(String fileName, String nickname, java.util.Map<String, String> context)
+        throws ChatException
+    {
+        try
+        {
+            return _iceI_startDownloadAsync(fileName, nickname, context, true).waitForResponseOrUserEx();
+        }
+        catch(ChatException ex)
+        {
+            throw ex;
+        }
+        catch(com.zeroc.Ice.UserException ex)
+        {
+            throw new com.zeroc.Ice.UnknownUserException(ex.ice_id(), ex);
+        }
+    }
+
+    default java.util.concurrent.CompletableFuture<java.lang.String> startDownloadAsync(String fileName, String nickname)
+    {
+        return _iceI_startDownloadAsync(fileName, nickname, com.zeroc.Ice.ObjectPrx.noExplicitContext, false);
+    }
+
+    default java.util.concurrent.CompletableFuture<java.lang.String> startDownloadAsync(String fileName, String nickname, java.util.Map<String, String> context)
+    {
+        return _iceI_startDownloadAsync(fileName, nickname, context, false);
+    }
+
+    /**
+     * @hidden
+     * @param iceP_fileName -
+     * @param iceP_nickname -
+     * @param context -
+     * @param sync -
+     * @return -
+     **/
+    default com.zeroc.IceInternal.OutgoingAsync<java.lang.String> _iceI_startDownloadAsync(String iceP_fileName, String iceP_nickname, java.util.Map<String, String> context, boolean sync)
+    {
+        com.zeroc.IceInternal.OutgoingAsync<java.lang.String> f = new com.zeroc.IceInternal.OutgoingAsync<>(this, "startDownload", null, sync, _iceE_startDownload);
+        f.invoke(true, context, null, ostr -> {
+                     ostr.writeString(iceP_fileName);
+                     ostr.writeString(iceP_nickname);
+                 }, istr -> {
+                     String ret;
+                     ret = istr.readString();
+                     return ret;
+                 });
+        return f;
+    }
+
+    /** @hidden */
+    static final Class<?>[] _iceE_startDownload =
+    {
+        ChatException.class
+    };
+
+    default byte[] readChunk(String sessionId, long offset, long size)
+    {
+        return readChunk(sessionId, offset, size, com.zeroc.Ice.ObjectPrx.noExplicitContext);
+    }
+
+    default byte[] readChunk(String sessionId, long offset, long size, java.util.Map<String, String> context)
+    {
+        return _iceI_readChunkAsync(sessionId, offset, size, context, true).waitForResponse();
+    }
+
+    default java.util.concurrent.CompletableFuture<byte[]> readChunkAsync(String sessionId, long offset, long size)
+    {
+        return _iceI_readChunkAsync(sessionId, offset, size, com.zeroc.Ice.ObjectPrx.noExplicitContext, false);
+    }
+
+    default java.util.concurrent.CompletableFuture<byte[]> readChunkAsync(String sessionId, long offset, long size, java.util.Map<String, String> context)
+    {
+        return _iceI_readChunkAsync(sessionId, offset, size, context, false);
+    }
+
+    /**
+     * @hidden
+     * @param iceP_sessionId -
+     * @param iceP_offset -
+     * @param iceP_size -
+     * @param context -
+     * @param sync -
+     * @return -
+     **/
+    default com.zeroc.IceInternal.OutgoingAsync<byte[]> _iceI_readChunkAsync(String iceP_sessionId, long iceP_offset, long iceP_size, java.util.Map<String, String> context, boolean sync)
+    {
+        com.zeroc.IceInternal.OutgoingAsync<byte[]> f = new com.zeroc.IceInternal.OutgoingAsync<>(this, "readChunk", null, sync, null);
+        f.invoke(true, context, null, ostr -> {
+                     ostr.writeString(iceP_sessionId);
+                     ostr.writeLong(iceP_offset);
+                     ostr.writeLong(iceP_size);
+                 }, istr -> {
+                     byte[] ret;
+                     ret = istr.readByteSeq();
+                     return ret;
+                 });
+        return f;
+    }
+
+    default void closeDownload(String sessionId)
+    {
+        closeDownload(sessionId, com.zeroc.Ice.ObjectPrx.noExplicitContext);
+    }
+
+    default void closeDownload(String sessionId, java.util.Map<String, String> context)
+    {
+        _iceI_closeDownloadAsync(sessionId, context, true).waitForResponse();
+    }
+
+    default java.util.concurrent.CompletableFuture<Void> closeDownloadAsync(String sessionId)
+    {
+        return _iceI_closeDownloadAsync(sessionId, com.zeroc.Ice.ObjectPrx.noExplicitContext, false);
+    }
+
+    default java.util.concurrent.CompletableFuture<Void> closeDownloadAsync(String sessionId, java.util.Map<String, String> context)
+    {
+        return _iceI_closeDownloadAsync(sessionId, context, false);
+    }
+
+    /**
+     * @hidden
+     * @param iceP_sessionId -
+     * @param context -
+     * @param sync -
+     * @return -
+     **/
+    default com.zeroc.IceInternal.OutgoingAsync<Void> _iceI_closeDownloadAsync(String iceP_sessionId, java.util.Map<String, String> context, boolean sync)
+    {
+        com.zeroc.IceInternal.OutgoingAsync<Void> f = new com.zeroc.IceInternal.OutgoingAsync<>(this, "closeDownload", null, sync, null);
+        f.invoke(false, context, null, ostr -> {
+                     ostr.writeString(iceP_sessionId);
+                 }, null);
+        return f;
+    }
+
     /**
      * Contacts the remote server to verify that the object implements this type.
      * Raises a local exception if a communication error occurs.
