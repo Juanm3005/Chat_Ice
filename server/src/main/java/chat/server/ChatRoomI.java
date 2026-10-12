@@ -1,5 +1,6 @@
 package chat.server;
 
+import ChatApp.ChatClientPrx;
 import ChatApp.ChatException;
 import ChatApp.ChatMessage;
 import ChatApp.ChatRoom;
@@ -24,6 +25,9 @@ public class ChatRoomI implements ChatApp.ChatRoom {
     private final File storageDir = new File("chat_files");
     private final Map<String, UploadSession> activeUploads = new ConcurrentHashMap<>();
     private final Map<String, DownloadSession> activeDownloads = new ConcurrentHashMap<>();
+
+    // Proxies de callback de cada usuario conectado.
+    private final Map<String, ChatClientPrx> clientCallbacks = new ConcurrentHashMap<>();
 
     @Override
     public synchronized void login(String nickname, Current current) throws ChatException {
@@ -75,7 +79,64 @@ public class ChatRoomI implements ChatApp.ChatRoom {
     }
 
     @Override
+    public void registerCallback(String nickname, ChatClientPrx callback, Current current) throws ChatException {
+        if (!onlineUsers.contains(nickname)) {
+            throw new ChatException("Acceso denegado: El usuario debe iniciar sesion primero.");
+        }
+        if (callback == null) {
+            throw new ChatException("El proxy de callback no puede ser nulo.");
+        }
+        // Conexion bidireccional: el servidor reutiliza la conexion TCP que abrio el cliente
+        // no necesita abrir una conexion nueva hacia el cliente
+        clientCallbacks.put(nickname, callback.ice_fixed(current.con));
+        System.out.println("[ICE - SERVER ] Callback registrado para: " + nickname);
+    }
+
+    @Override
+    public void sendPrivateMessage(String sender, String target, String message, Current current)
+            throws ChatException {
+        if (!onlineUsers.contains(sender)) {
+            throw new ChatException("Acceso denegado: El usuario debe iniciar sesion primero.");
+        }
+        if (target == null || target.trim().isEmpty()) {
+            throw new ChatException("Debe indicar el nickname del destinatario.");
+        }
+        String cleanTarget = target.trim();
+        if (cleanTarget.equals(sender)) {
+            throw new ChatException("No puedes enviarte un mensaje privado a ti mismo.");
+        }
+        ChatClientPrx targetPrx = clientCallbacks.get(cleanTarget);
+        if (!onlineUsers.contains(cleanTarget) || targetPrx == null) {
+            throw new ChatException("El usuario '" + cleanTarget + "' no existe o se ha desconectado.");
+        }
+        if (message == null || message.trim().isEmpty()) {
+            return;
+        }
+
+        long id = messageIdCounter.incrementAndGet();
+        String now = LocalTime.now().format(timeFormat);
+        ChatMessage msg = new ChatMessage(id, sender, message.trim(), now);
+
+        // Despacho asincrono: no bloquea al remitente mientras se entrega al destinatario
+        targetPrx.receivePrivateMessageAsync(msg).whenComplete((ok, ex) -> {
+            if (ex != null) {
+                System.err.println("[PRIVADO] No se pudo entregar a " + cleanTarget + ": " + ex);
+                removeUnreachableClient(cleanTarget, targetPrx);
+            }
+        });
+        System.out.println("[" + now + "] <" + sender + " -> " + cleanTarget + "> (privado)");
+    }
+
+    // Si un callback falla el cliente se cayo de forma abrupta: se limpia su sesion
+    private void removeUnreachableClient(String nickname, ChatClientPrx failedPrx) {
+        if (clientCallbacks.remove(nickname, failedPrx)) {
+            logout(nickname, null);
+        }
+    }
+
+    @Override
     public synchronized void logout(String nickname, Current current) {
+        clientCallbacks.remove(nickname);
         if (onlineUsers.remove(nickname)) {
             System.out.println("[ICE - SERVER ] Usuario desconectado : " + nickname);
             String now = LocalTime.now().format(timeFormat);

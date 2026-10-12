@@ -17,6 +17,12 @@ package ChatApp;
 
 public interface ChatRoom extends com.zeroc.Ice.Object
 {
+    void registerCallback(String nickname, ChatClientPrx callback, com.zeroc.Ice.Current current)
+        throws ChatException;
+
+    void sendPrivateMessage(String sender, String target, String message, com.zeroc.Ice.Current current)
+        throws ChatException;
+
     void login(String nickname, com.zeroc.Ice.Current current)
         throws ChatException;
 
@@ -65,6 +71,52 @@ public interface ChatRoom extends com.zeroc.Ice.Object
     static String ice_staticId()
     {
         return "::ChatApp::ChatRoom";
+    }
+
+    /**
+     * @hidden
+     * @param obj -
+     * @param inS -
+     * @param current -
+     * @return -
+     * @throws com.zeroc.Ice.UserException -
+    **/
+    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_registerCallback(ChatRoom obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
+        throws com.zeroc.Ice.UserException
+    {
+        com.zeroc.Ice.Object._iceCheckMode(null, current.mode);
+        com.zeroc.Ice.InputStream istr = inS.startReadParams();
+        String iceP_nickname;
+        ChatClientPrx iceP_callback;
+        iceP_nickname = istr.readString();
+        iceP_callback = ChatClientPrx.uncheckedCast(istr.readProxy());
+        inS.endReadParams();
+        obj.registerCallback(iceP_nickname, iceP_callback, current);
+        return inS.setResult(inS.writeEmptyParams());
+    }
+
+    /**
+     * @hidden
+     * @param obj -
+     * @param inS -
+     * @param current -
+     * @return -
+     * @throws com.zeroc.Ice.UserException -
+    **/
+    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_sendPrivateMessage(ChatRoom obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
+        throws com.zeroc.Ice.UserException
+    {
+        com.zeroc.Ice.Object._iceCheckMode(null, current.mode);
+        com.zeroc.Ice.InputStream istr = inS.startReadParams();
+        String iceP_sender;
+        String iceP_target;
+        String iceP_message;
+        iceP_sender = istr.readString();
+        iceP_target = istr.readString();
+        iceP_message = istr.readString();
+        inS.endReadParams();
+        obj.sendPrivateMessage(iceP_sender, iceP_target, iceP_message, current);
+        return inS.setResult(inS.writeEmptyParams());
     }
 
     /**
@@ -314,6 +366,8 @@ public interface ChatRoom extends com.zeroc.Ice.Object
         "logout",
         "postMessage",
         "readChunk",
+        "registerCallback",
+        "sendPrivateMessage",
         "startDownload",
         "startUpload",
         "writeChunk"
@@ -382,13 +436,21 @@ public interface ChatRoom extends com.zeroc.Ice.Object
             }
             case 12:
             {
-                return _iceD_startDownload(this, in, current);
+                return _iceD_registerCallback(this, in, current);
             }
             case 13:
             {
-                return _iceD_startUpload(this, in, current);
+                return _iceD_sendPrivateMessage(this, in, current);
             }
             case 14:
+            {
+                return _iceD_startDownload(this, in, current);
+            }
+            case 15:
+            {
+                return _iceD_startUpload(this, in, current);
+            }
+            case 16:
             {
                 return _iceD_writeChunk(this, in, current);
             }

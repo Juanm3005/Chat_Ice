@@ -17,6 +17,122 @@ package ChatApp;
 
 public interface ChatRoomPrx extends com.zeroc.Ice.ObjectPrx
 {
+    default void registerCallback(String nickname, ChatClientPrx callback)
+        throws ChatException
+    {
+        registerCallback(nickname, callback, com.zeroc.Ice.ObjectPrx.noExplicitContext);
+    }
+
+    default void registerCallback(String nickname, ChatClientPrx callback, java.util.Map<String, String> context)
+        throws ChatException
+    {
+        try
+        {
+            _iceI_registerCallbackAsync(nickname, callback, context, true).waitForResponseOrUserEx();
+        }
+        catch(ChatException ex)
+        {
+            throw ex;
+        }
+        catch(com.zeroc.Ice.UserException ex)
+        {
+            throw new com.zeroc.Ice.UnknownUserException(ex.ice_id(), ex);
+        }
+    }
+
+    default java.util.concurrent.CompletableFuture<Void> registerCallbackAsync(String nickname, ChatClientPrx callback)
+    {
+        return _iceI_registerCallbackAsync(nickname, callback, com.zeroc.Ice.ObjectPrx.noExplicitContext, false);
+    }
+
+    default java.util.concurrent.CompletableFuture<Void> registerCallbackAsync(String nickname, ChatClientPrx callback, java.util.Map<String, String> context)
+    {
+        return _iceI_registerCallbackAsync(nickname, callback, context, false);
+    }
+
+    /**
+     * @hidden
+     * @param iceP_nickname -
+     * @param iceP_callback -
+     * @param context -
+     * @param sync -
+     * @return -
+     **/
+    default com.zeroc.IceInternal.OutgoingAsync<Void> _iceI_registerCallbackAsync(String iceP_nickname, ChatClientPrx iceP_callback, java.util.Map<String, String> context, boolean sync)
+    {
+        com.zeroc.IceInternal.OutgoingAsync<Void> f = new com.zeroc.IceInternal.OutgoingAsync<>(this, "registerCallback", null, sync, _iceE_registerCallback);
+        f.invoke(true, context, null, ostr -> {
+                     ostr.writeString(iceP_nickname);
+                     ostr.writeProxy(iceP_callback);
+                 }, null);
+        return f;
+    }
+
+    /** @hidden */
+    static final Class<?>[] _iceE_registerCallback =
+    {
+        ChatException.class
+    };
+
+    default void sendPrivateMessage(String sender, String target, String message)
+        throws ChatException
+    {
+        sendPrivateMessage(sender, target, message, com.zeroc.Ice.ObjectPrx.noExplicitContext);
+    }
+
+    default void sendPrivateMessage(String sender, String target, String message, java.util.Map<String, String> context)
+        throws ChatException
+    {
+        try
+        {
+            _iceI_sendPrivateMessageAsync(sender, target, message, context, true).waitForResponseOrUserEx();
+        }
+        catch(ChatException ex)
+        {
+            throw ex;
+        }
+        catch(com.zeroc.Ice.UserException ex)
+        {
+            throw new com.zeroc.Ice.UnknownUserException(ex.ice_id(), ex);
+        }
+    }
+
+    default java.util.concurrent.CompletableFuture<Void> sendPrivateMessageAsync(String sender, String target, String message)
+    {
+        return _iceI_sendPrivateMessageAsync(sender, target, message, com.zeroc.Ice.ObjectPrx.noExplicitContext, false);
+    }
+
+    default java.util.concurrent.CompletableFuture<Void> sendPrivateMessageAsync(String sender, String target, String message, java.util.Map<String, String> context)
+    {
+        return _iceI_sendPrivateMessageAsync(sender, target, message, context, false);
+    }
+
+    /**
+     * @hidden
+     * @param iceP_sender -
+     * @param iceP_target -
+     * @param iceP_message -
+     * @param context -
+     * @param sync -
+     * @return -
+     **/
+    default com.zeroc.IceInternal.OutgoingAsync<Void> _iceI_sendPrivateMessageAsync(String iceP_sender, String iceP_target, String iceP_message, java.util.Map<String, String> context, boolean sync)
+    {
+        com.zeroc.IceInternal.OutgoingAsync<Void> f = new com.zeroc.IceInternal.OutgoingAsync<>(this, "sendPrivateMessage", null, sync, _iceE_sendPrivateMessage);
+        f.invoke(true, context, null, ostr -> {
+                     ostr.writeString(iceP_sender);
+                     ostr.writeString(iceP_target);
+                     ostr.writeString(iceP_message);
+                 }, null);
+        return f;
+    }
+
+    /** @hidden */
+    static final Class<?>[] _iceE_sendPrivateMessage =
+    {
+        ChatException.class
+    };
+
     default void login(String nickname)
         throws ChatException
     {

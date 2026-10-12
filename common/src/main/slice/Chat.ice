@@ -19,8 +19,22 @@ module ChatApp {
    // Archivos multimedia
    sequence<byte> ByteSeq;
 
+    // Interfaz de retorno (callback) implementada por el CLIENTE.
+    // El servidor invoca estos metodos para notificar eventos asincronos.
+    interface ChatClient {
+        // RF-02: el servidor entrega un mensaje privado dirigido a este cliente
+        void receivePrivateMessage(ChatMessage msg);
+    };
+
     // Interfaz remota provista por el servidor Ice
     interface ChatRoom {
+        // Registra el proxy de callback del cliente; se llama justo despues de login
+        void registerCallback(string nickname, ChatClient* callback) throws ChatException;
+
+        // RF-02: envia un mensaje privado 1 a 1. Si retorna sin excepcion, el servidor
+        // recibio el mensaje (confirmacion); si el destino no existe lanza ChatException
+        void sendPrivateMessage(string sender, string target, string message) throws ChatException;
+
         // Registra un usuario; falla si el nickname ya existe
         void login(string nickname) throws ChatException;
 
