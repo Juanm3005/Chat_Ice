@@ -1,9 +1,11 @@
 package chat.client;
 
+import ChatApp.ChatClientPrx;
 import ChatApp.ChatException;
 import ChatApp.ChatMessage;
 import ChatApp.ChatRoomPrx;
 import com.zeroc.Ice.Communicator;
+import com.zeroc.Ice.ObjectAdapter;
 import com.zeroc.Ice.ObjectPrx;
 import com.zeroc.Ice.Util;
 
@@ -16,6 +18,8 @@ import java.util.Scanner;
 public class ClientMain {
     private static volatile boolean running = true;
     private static long lastReceivedId = 0;
+    // Conversacion activa: chat general o ventana privada abierta con /msg
+    private static final ConversationContext conversation = new ConversationContext();
 
     public static void main(String[] args) {
         // Inicializar el Communicator del cliente
@@ -43,7 +47,7 @@ public class ClientMain {
                 try {
                     chatPrx.login(nickname);
                     System.out.println(">>> Autenticado correctamente como '" + nickname + "'.");
-                    System.out.println(">>> Comandos disponibles: /users (lista usuarios), /exit (salir)");
+                    System.out.println(">>> Escribe /help para ver todos los comandos disponibles.");
                     System.out.println("-------------------------------------------------");
                     break;
                 } catch (ChatException ce) {
@@ -52,6 +56,9 @@ public class ClientMain {
             }
 
             final String activeUser = nickname;
+
+            // Registro del callback: el servidor usara este proxy para notificar eventos
+            registerCallback(communicator, chatPrx, activeUser);
 
             // 3. Hilo demonio en segundo plano: Sondeo continuo de mensajes (Polling no
             // bloqueante)
@@ -65,8 +72,10 @@ public class ClientMain {
                             }
                             // Mostrar mensaje solo si no fue enviado por el propio usuario
                             if (!msg.sender.equals(activeUser)) {
-                                System.out.println("\n[" + msg.timestamp + "] <" + msg.sender + ">: " + msg.text);
-                                System.out.print("> ");
+                                // Dentro de una ventana privada se marca el origen del mensaje
+                                String origin = conversation.getMode() == ConversationContext.Mode.GENERAL
+                                        ? "" : "[General] ";
+                                printAsync(origin + "[" + msg.timestamp + "] <" + msg.sender + ">: " + msg.text);
                             }
                         }
                         Thread.sleep(500); // Consulta cada 500 milisegundos
@@ -84,7 +93,7 @@ public class ClientMain {
 
             // 4. Bucle principal de lectura por consola (REPL)
             while (running) {
-                System.out.print("> ");
+                System.out.print(conversation.prompt());
                 String input = scanner.nextLine().trim();
 
                 if (input.equalsIgnoreCase("/exit")) {
@@ -95,6 +104,18 @@ public class ClientMain {
                     }
                     System.out.println(">>> Sesion cerrada satisfactoriamente. Hasta pronto!");
                     break;
+                } else if (input.equals("/msg") || input.startsWith("/msg ")) {
+                    openPrivateChat(chatPrx, activeUser, input.substring(4).trim());
+                } else if (input.equalsIgnoreCase("/closew")) {
+                    if (conversation.getMode() == ConversationContext.Mode.PRIVATE) {
+                        System.out.println(">>> Conversacion privada con '" + conversation.getTarget()
+                                + "' cerrada. De vuelta al chat general.");
+                        conversation.backToGeneral();
+                    } else {
+                        System.out.println(">>> No tienes ninguna conversacion privada abierta.");
+                    }
+                } else if (input.equalsIgnoreCase("/help")) {
+                    printHelp();
                 } else if (input.equalsIgnoreCase("/users")) {
                     try {
                         String[] users = chatPrx.getOnlineUsers();
@@ -117,6 +138,8 @@ public class ClientMain {
                     } else {
                         System.out.println(" || Debes usar la sigueinte estructura: /download<ruta_del_archivo>");
                     }
+                } else if (!input.isEmpty() && conversation.getMode() == ConversationContext.Mode.PRIVATE) {
+                    sendPrivate(chatPrx, activeUser, conversation.getTarget(), input);
                 } else if (!input.isEmpty()) {
                     try {
                         chatPrx.postMessage(activeUser, input);
@@ -131,6 +154,89 @@ public class ClientMain {
         } catch (Exception e) {
             System.err.println("[ERROR FATAL] " + e.getMessage());
         }
+    }
+
+    // Lista de comandos de la CLI. Al agregar un comando nuevo, documentarlo tambien aqui.
+    private static void printHelp() {
+        System.out.println("===================== COMANDOS =====================");
+        System.out.println("  /help                    Muestra esta lista de comandos");
+        System.out.println("  /users                   Lista los usuarios conectados");
+        System.out.println("  /msg <usuario> [texto]   Abre un chat privado con <usuario> (y envia [texto] si se indica)");
+        System.out.println("  /closew                  Cierra el chat privado y vuelve al chat general");
+        System.out.println("  /upload <ruta>           Sube un archivo al servidor y lo comparte con la sala");
+        System.out.println("  /download <archivo>      Descarga un archivo compartido a la carpeta 'downloads'");
+        System.out.println("  /exit                    Cierra la sesion y sale del chat");
+        System.out.println("  <texto>                  Envia el texto a la conversacion actual (general o privada)");
+        System.out.println("====================================================");
+    }
+
+    // Crea un adaptador sin endpoints y lo asocia a la conexion ya abierta con el servidor
+    // (conexion bidireccional). Asi el servidor puede invocar al cliente sin que este abra
+    // puertos, lo que funciona igual en localhost y entre maquinas de la red.
+    private static void registerCallback(Communicator communicator, ChatRoomPrx chatPrx, String nickname)
+            throws ChatException {
+        ObjectAdapter adapter = communicator.createObjectAdapter("");
+        ChatClientI servant = new ChatClientI(ClientMain::onPrivateMessage);
+        ChatClientPrx callbackPrx = ChatClientPrx.uncheckedCast(adapter.addWithUUID(servant));
+        adapter.activate();
+        chatPrx.ice_getConnection().setAdapter(adapter);
+        chatPrx.registerCallback(nickname, callbackPrx);
+    }
+
+    // Se ejecuta en el hilo de Ice cuando el servidor entrega un mensaje privado
+    private static void onPrivateMessage(ChatMessage msg) {
+        if (conversation.isPrivateWith(msg.sender)) {
+            printAsync("[" + msg.timestamp + "] <" + msg.sender + ">: " + msg.text);
+        } else {
+            printAsync("[Privado de " + msg.sender + "] [" + msg.timestamp + "]: " + msg.text
+                    + "  (responde con /msg " + msg.sender + ")");
+        }
+    }
+
+    // /msg <usuario> [texto]: abre la ventana privada y opcionalmente envia el primer mensaje
+    private static void openPrivateChat(ChatRoomPrx chatPrx, String activeUser, String args) {
+        if (args.isEmpty()) {
+            System.out.println(" || Debes usar la siguiente estructura: /msg <usuario> [texto]");
+            return;
+        }
+        String[] parts = args.split("\\s+", 2);
+        String target = parts[0];
+        if (target.equals(activeUser)) {
+            System.out.println("[ERROR] No puedes abrir una conversacion privada contigo mismo.");
+            return;
+        }
+        try {
+            if (!Arrays.asList(chatPrx.getOnlineUsers()).contains(target)) {
+                System.out.println("[ERROR] El usuario '" + target + "' no existe o no esta conectado.");
+                return;
+            }
+        } catch (Exception e) {
+            System.err.println("[ERROR RED] No se pudo verificar el usuario: " + e.getMessage());
+            return;
+        }
+        conversation.openPrivate(target);
+        System.out.println("============ Chat privado con " + target + " ============");
+        System.out.println(">>> Escribe tus mensajes. Usa /closew para volver al chat general.");
+        if (parts.length > 1) {
+            sendPrivate(chatPrx, activeUser, target, parts[1]);
+        }
+    }
+
+    private static void sendPrivate(ChatRoomPrx chatPrx, String activeUser, String target, String text) {
+        try {
+            chatPrx.sendPrivateMessage(activeUser, target, text);
+            System.out.println("    (entregado al servidor)");
+        } catch (ChatException ce) {
+            System.err.println("[ERROR PRIVADO] " + ce.reason + " Usa /closew para volver al chat general.");
+        } catch (Exception e) {
+            System.err.println("[ERROR RED] Comunicacion fallida: " + e.getMessage());
+        }
+    }
+
+    // Imprime un mensaje que llega de forma asincrona y vuelve a mostrar el prompt actual
+    private static synchronized void printAsync(String line) {
+        System.out.println("\n" + line);
+        System.out.print(conversation.prompt());
     }
 
     private static void uploadFile(ChatRoomPrx chatPrx, String nickname, String pathStr) {
