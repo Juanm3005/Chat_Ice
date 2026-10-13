@@ -1,7 +1,6 @@
 package chat.client;
 
 import ChatApp.CallCallbackPrx;
-import ChatApp.CallException;
 import ChatApp.CallServicePrx;
 import ChatApp.ChatClientPrx;
 import ChatApp.ChatException;
@@ -16,6 +15,7 @@ import com.zeroc.Ice.Util;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.util.Arrays;
@@ -32,184 +32,207 @@ public class ClientMain {
     private static final Set<String> joinedRooms = ConcurrentHashMap.newKeySet();
 
     public static void main(String[] args) {
-        // Inicializar el Communicator del cliente
-        try (Communicator communicator = Util.initialize(args)) {
+        running = true;
+        try (Scanner scanner = new Scanner(System.in);
+                Communicator communicator = Util.initialize(args)) {
             final String serverHost = args.length > 0 ? args[0] : "127.0.0.1";
-            // 1. Obtener proxy base y realizar casting seguro hacia ChatRoomPrx
-            String proxyString = "ChatService:default -h " + serverHost + " -p 10000";
-            ObjectPrx base = communicator.stringToProxy(proxyString);
-            ChatRoomPrx chatPrx = ChatRoomPrx.checkedCast(base);
-
-            if (chatPrx == null) {
-                System.err.println("[ERROR] No se pudo establecer conexion con el servicio Ice remoto.");
-                return;
-            }
-
-            Scanner scanner = new Scanner(System.in);
-            String nickname = "";
-
-            // 2. Flujo de inicio de sesion con manejo de nombres duplicados
-            System.out.println("=== BIENVENIDO AL CHAT DISTRIBUIDO ZEROC ICE ===");
-            while (true) {
-                System.out.print("Ingrese su nickname: ");
-                nickname = scanner.nextLine().trim();
-                if (nickname.isEmpty())
-                    continue;
-                try {
-                    chatPrx.login(nickname);
-                    System.out.println(">>> Autenticado correctamente como '" + nickname + "'.");
-                    System.out.println(">>> Escribe /help para ver todos los comandos disponibles.");
-                    System.out.println("-------------------------------------------------");
-                    break;
-                } catch (ChatException ce) {
-                    System.out.println("[RECHAZADO POR SERVIDOR] " + ce.reason + " Intente nuevamente.");
-                }
-            }
-
-            final String activeUser = nickname;
-
-            // Registro del callback de chat
-            ObjectAdapter callbackAdapter = registerCallback(communicator, chatPrx, activeUser);
-
-            // Registro del servicio de llamadas (RF-05)
-            CallServicePrx callPrx = CallServicePrx.checkedCast(
-                    communicator.stringToProxy("CallService:default -h " + serverHost + " -p 10000"));
-            if (callPrx == null) {
-                System.err.println("[ERROR] El servidor no ofrece el servicio de llamadas.");
-                return;
-            }
-            CallManager callManager = new CallManager(activeUser, detectLocalIp(serverHost), callPrx,
-                    conversation::prompt);
-            CallCallbackPrx callbackPrx = CallCallbackPrx.uncheckedCast(
-                    callbackAdapter.addWithUUID(new CallCallbackI(callManager)));
-            callPrx.ice_getConnection().setAdapter(callbackAdapter);
+            ChatRoomPrx cleanupChatPrx = null;
+            CallServicePrx cleanupCallPrx = null;
+            CallManager cleanupCallManager = null;
+            String loggedInUser = null;
+            boolean callCallbackRegistered = false;
             try {
-                callPrx.registerCallback(activeUser, callbackPrx);
-            } catch (CallException ce) {
-                System.err.println("[ERROR] No se pudo registrar el callback de llamadas: " + ce.reason);
-                return;
-            }
+                ObjectPrx base = communicator.stringToProxy(
+                        "ChatService:default -h " + serverHost + " -p 10000");
+                final ChatRoomPrx chatPrx = ChatRoomPrx.checkedCast(base);
+                if (chatPrx == null) {
+                    System.err.println("[ERROR] No se pudo establecer conexion con el servicio Ice remoto.");
+                    return;
+                }
+                cleanupChatPrx = chatPrx;
 
-            // 3. Hilo demonio en segundo plano: Sondeo continuo de mensajes (Polling no bloqueante)
-            Thread listenerThread = new Thread(() -> {
-                while (running) {
+                String nickname = "";
+                boolean authenticated = false;
+
+                System.out.println("=== BIENVENIDO AL CHAT DISTRIBUIDO ZEROC ICE ===");
+                while (scanner.hasNextLine()) {
+                    System.out.print("Ingrese su nickname: ");
+                    nickname = scanner.nextLine().trim();
+                    if (nickname.isEmpty()) {
+                        continue;
+                    }
                     try {
-                        ChatMessage[] newMessages = chatPrx.getPendingMessages(activeUser, lastReceivedId);
-                        for (ChatMessage msg : newMessages) {
-                            if (msg.id > lastReceivedId) {
-                                lastReceivedId = msg.id;
-                            }
-                            // Mostrar mensaje solo si no fue enviado por el propio usuario
-                            if (!msg.sender.equals(activeUser)) {
-                                String origin = conversation.getMode() == ConversationContext.Mode.GENERAL
-                                        ? "" : "[General] ";
-                                printAsync(origin + "[" + msg.timestamp + "] <" + msg.sender + ">: " + msg.text);
-                            }
-                        }
-                        Thread.sleep(500); // Consulta cada 500 milisegundos
-                    } catch (Exception e) {
-                        if (running) {
-                            System.err.println("\n[AVISO] Se perdio la comunicacion con el servidor Ice.");
-                            running = false;
-                        }
+                        chatPrx.login(nickname);
+                        authenticated = true;
+                        System.out.println(">>> Autenticado correctamente como '" + nickname + "'.");
+                        System.out.println(">>> Escribe /help para ver todos los comandos disponibles.");
+                        System.out.println("-------------------------------------------------");
                         break;
+                    } catch (ChatException ce) {
+                        System.out.println("[RECHAZADO POR SERVIDOR] " + ce.reason + " Intente nuevamente.");
                     }
                 }
-            });
-            listenerThread.setDaemon(true);
-            listenerThread.start();
+                if (!authenticated) {
+                    return;
+                }
 
-            // 4. Bucle principal de lectura por consola (REPL)
-            while (running) {
-                System.out.print(conversation.prompt());
-                String input = scanner.nextLine().trim();
+                final String activeUser = nickname;
+                loggedInUser = activeUser;
+                ObjectAdapter callbackAdapter = registerCallback(communicator, chatPrx, activeUser);
 
-                if (input.equalsIgnoreCase("/exit")) {
-                    running = false;
-                    callManager.shutdown();
-                    try {
-                        callPrx.unregisterCallback(activeUser);
-                        chatPrx.logout(activeUser);
-                    } catch (Exception ignored) {
+                CallServicePrx callPrx = CallServicePrx.checkedCast(
+                        communicator.stringToProxy("CallService:default -h " + serverHost + " -p 10000"));
+                if (callPrx == null) {
+                    System.err.println("[ERROR] El servidor no ofrece el servicio de llamadas.");
+                    return;
+                }
+                cleanupCallPrx = callPrx;
+                CallManager callManager = new CallManager(activeUser, detectLocalIp(serverHost), callPrx,
+                        conversation::prompt);
+                cleanupCallManager = callManager;
+                CallCallbackPrx callbackPrx = CallCallbackPrx.uncheckedCast(
+                        callbackAdapter.addWithUUID(new CallCallbackI(callManager)));
+                callPrx.ice_getConnection().setAdapter(callbackAdapter);
+                callPrx.registerCallback(activeUser, callbackPrx);
+                callCallbackRegistered = true;
+
+                Thread listenerThread = new Thread(() -> {
+                    while (running) {
+                        try {
+                            ChatMessage[] newMessages = chatPrx.getPendingMessages(activeUser, lastReceivedId);
+                            for (ChatMessage msg : newMessages) {
+                                if (msg.id > lastReceivedId) {
+                                    lastReceivedId = msg.id;
+                                }
+                                if (!msg.sender.equals(activeUser)) {
+                                    String origin = conversation.getMode() == ConversationContext.Mode.GENERAL
+                                            ? "" : "[General] ";
+                                    printAsync(origin + "[" + msg.timestamp + "] <" + msg.sender + ">: " + msg.text);
+                                }
+                            }
+                            Thread.sleep(500);
+                        } catch (Exception e) {
+                            if (running) {
+                                System.err.println("\n[AVISO] Se perdio la comunicacion con el servidor Ice: "
+                                        + errorMessage(e));
+                                running = false;
+                            }
+                            break;
+                        }
                     }
-                    System.out.println(">>> Sesion cerrada satisfactoriamente. Hasta pronto!");
-                    break;
-                } else if (input.equals("/msg") || input.startsWith("/msg ")) {
-                    openPrivateChat(chatPrx, activeUser, input.substring(4).trim());
-                } else if (input.equalsIgnoreCase("/closew") || input.equalsIgnoreCase("/general")) {
-                    closeConversation();
-                } else if (input.equalsIgnoreCase("/rooms")) {
-                    listRooms(chatPrx);
-                } else if (input.equals("/create") || input.startsWith("/create ")) {
-                    createRoom(chatPrx, activeUser, argument(input));
-                } else if (input.equals("/join") || input.startsWith("/join ")) {
-                    joinRoom(chatPrx, activeUser, argument(input));
-                } else if (input.equals("/leave") || input.startsWith("/leave ")) {
-                    leaveRoom(chatPrx, activeUser, argument(input));
-                } else if (input.equals("/room") || input.startsWith("/room ")) {
-                    switchRoom(argument(input));
-                } else if (input.equals("/members") || input.startsWith("/members ")) {
-                    showMembers(chatPrx, argument(input));
-                } else if (input.equals("/call") || input.startsWith("/call ")) {
-                    String target = input.substring(5).trim();
-                    if (target.isEmpty()) {
-                        System.out.println(" || Debes usar la siguiente estructura: /call <usuario>");
-                    } else {
-                        callManager.call(target);
-                    }
-                } else if (input.equalsIgnoreCase("/accept")) {
-                    callManager.accept();
-                } else if (input.equalsIgnoreCase("/reject")) {
-                    callManager.reject();
-                } else if (input.equalsIgnoreCase("/hangup")) {
-                    callManager.hangup();
-                } else if (input.equalsIgnoreCase("/help")) {
-                    printHelp();
-                } else if (input.equalsIgnoreCase("/users")) {
-                    try {
-                        String[] users = chatPrx.getOnlineUsers();
-                        System.out.println(">>> Usuarios activos (" + users.length + "): " + String.join(", ",
-                                users));
-                    } catch (Exception e) {
-                        System.err.println("[ERROR] No se pudo obtener la lista de usuarios: " + e.getMessage());
-                    }
-                } else if (input.startsWith("/upload")) {
-                    String filePath = input.substring(8).trim();
-                    if (!filePath.isEmpty()) {
-                        ConversationContext.Mode mode = conversation.getMode();
-                        String target = mode == ConversationContext.Mode.PRIVATE ? conversation.getTarget() : null;
-                        String room = mode == ConversationContext.Mode.ROOM ? conversation.getTarget() : null;
-                        uploadFile(chatPrx, activeUser, target, room, filePath);
-                    } else {
-                        System.out.println(" || Debes usar la siguiente estructura: /upload <ruta_del_archivo>");
-                    }
-                } else if (input.startsWith("/download")) {
-                    String fileName = input.substring(10).trim();
-                    if (!fileName.isEmpty()) {
-                        String room = conversation.getMode() == ConversationContext.Mode.ROOM
-                                ? conversation.getTarget() : null;
-                        downloadFile(chatPrx, activeUser, fileName, room);
-                    } else {
-                        System.out.println(" || Debes usar la siguiente estructura: /download <nombre_del_archivo>");
-                    }
-                } else if (!input.isEmpty() && conversation.getMode() == ConversationContext.Mode.PRIVATE) {
-                    sendPrivate(chatPrx, activeUser, conversation.getTarget(), input);
-                } else if (!input.isEmpty() && conversation.getMode() == ConversationContext.Mode.ROOM) {
-                    sendRoom(chatPrx, activeUser, conversation.getTarget(), input);
-                } else if (!input.isEmpty()) {
-                    try {
-                        chatPrx.postMessage(activeUser, input);
-                    } catch (ChatException ce) {
-                        System.err.println("[ERROR ENVIO] " + ce.reason);
-                    } catch (Exception e) {
-                        System.err.println("[ERROR RED] Comunicacion fallida: " + e.getMessage());
+                });
+                listenerThread.setDaemon(true);
+                listenerThread.start();
+
+                while (running && scanner.hasNextLine()) {
+                    System.out.print(conversation.prompt());
+                    String input = scanner.nextLine().trim();
+
+                    if (input.equalsIgnoreCase("/exit")) {
+                        running = false;
                         break;
+                    } else if (input.equals("/msg") || input.startsWith("/msg ")) {
+                        openPrivateChat(chatPrx, activeUser, input.substring(4).trim());
+                    } else if (input.equalsIgnoreCase("/closew") || input.equalsIgnoreCase("/general")) {
+                        closeConversation();
+                    } else if (input.equalsIgnoreCase("/rooms")) {
+                        listRooms(chatPrx);
+                    } else if (input.equals("/create") || input.startsWith("/create ")) {
+                        createRoom(chatPrx, activeUser, argument(input));
+                    } else if (input.equals("/join") || input.startsWith("/join ")) {
+                        joinRoom(chatPrx, activeUser, argument(input));
+                    } else if (input.equals("/leave") || input.startsWith("/leave ")) {
+                        leaveRoom(chatPrx, activeUser, argument(input));
+                    } else if (input.equals("/room") || input.startsWith("/room ")) {
+                        switchRoom(argument(input));
+                    } else if (input.equals("/members") || input.startsWith("/members ")) {
+                        showMembers(chatPrx, argument(input));
+                    } else if (input.equals("/call") || input.startsWith("/call ")) {
+                        String target = argument(input);
+                        if (target.isEmpty()) {
+                            System.out.println(" || Debes usar la siguiente estructura: /call <usuario>");
+                        } else {
+                            callManager.call(target);
+                        }
+                    } else if (input.equalsIgnoreCase("/accept")) {
+                        callManager.accept();
+                    } else if (input.equalsIgnoreCase("/reject")) {
+                        callManager.reject();
+                    } else if (input.equalsIgnoreCase("/hangup")) {
+                        callManager.hangup();
+                    } else if (input.equalsIgnoreCase("/help")) {
+                        printHelp();
+                    } else if (input.equalsIgnoreCase("/users")) {
+                        try {
+                            String[] users = chatPrx.getOnlineUsers();
+                            System.out.println(">>> Usuarios activos (" + users.length + "): "
+                                    + String.join(", ", users));
+                        } catch (Exception e) {
+                            System.err.println("[ERROR] No se pudo obtener la lista de usuarios: " + errorMessage(e));
+                        }
+                    } else if (input.equals("/upload") || input.startsWith("/upload ")) {
+                        String filePath = argument(input);
+                        if (filePath.isEmpty()) {
+                            System.out.println(" || Debes usar la siguiente estructura: /upload <ruta_del_archivo>");
+                        } else {
+                            ConversationContext.Mode mode = conversation.getMode();
+                            String target = mode == ConversationContext.Mode.PRIVATE
+                                    ? conversation.getTarget() : null;
+                            String room = mode == ConversationContext.Mode.ROOM ? conversation.getTarget() : null;
+                            uploadFile(chatPrx, activeUser, target, room, filePath);
+                        }
+                    } else if (input.equals("/download") || input.startsWith("/download ")) {
+                        String fileName = argument(input);
+                        if (fileName.isEmpty()) {
+                            System.out.println(" || Debes usar la siguiente estructura: /download <nombre_del_archivo>");
+                        } else {
+                            String room = conversation.getMode() == ConversationContext.Mode.ROOM
+                                    ? conversation.getTarget() : null;
+                            downloadFile(chatPrx, activeUser, fileName, room);
+                        }
+                    } else if (!input.isEmpty() && conversation.getMode() == ConversationContext.Mode.PRIVATE) {
+                        sendPrivate(chatPrx, activeUser, conversation.getTarget(), input);
+                    } else if (!input.isEmpty() && conversation.getMode() == ConversationContext.Mode.ROOM) {
+                        sendRoom(chatPrx, activeUser, conversation.getTarget(), input);
+                    } else if (!input.isEmpty()) {
+                        try {
+                            chatPrx.postMessage(activeUser, input);
+                        } catch (ChatException ce) {
+                            System.err.println("[ERROR ENVIO] " + ce.reason);
+                        } catch (Exception e) {
+                            System.err.println("[ERROR RED] Comunicacion fallida: " + errorMessage(e));
+                            break;
+                        }
+                    }
+                }
+            } finally {
+                running = false;
+                if (cleanupCallManager != null) {
+                    cleanupCallManager.shutdown();
+                }
+                if (callCallbackRegistered && cleanupCallPrx != null) {
+                    try {
+                        cleanupCallPrx.unregisterCallback(loggedInUser);
+                    } catch (Exception e) {
+                        System.err.println("[AVISO] No se pudo cerrar el callback de llamadas: " + errorMessage(e));
+                    }
+                }
+                if (loggedInUser != null && cleanupChatPrx != null) {
+                    try {
+                        cleanupChatPrx.logout(loggedInUser);
+                    } catch (Exception e) {
+                        System.err.println("[AVISO] No se pudo cerrar la sesion del chat: " + errorMessage(e));
                     }
                 }
             }
         } catch (Exception e) {
-            System.err.println("[ERROR FATAL] " + e.getMessage());
+            System.err.println("[ERROR FATAL] " + errorMessage(e));
         }
+    }
+
+    private static String errorMessage(Exception exception) {
+        String message = exception.getMessage();
+        return exception.getClass().getSimpleName() + (message == null ? "" : ": " + message);
     }
 
     // Lista de comandos de la CLI. Al agregar un comando nuevo, documentarlo tambien aqui.
@@ -510,17 +533,23 @@ public class ClientMain {
     }
 
     public static void downloadFile(ChatRoomPrx chatPrx, String nickname, String fileName, String room) {
+        String safeName = new File(fileName).getName();
+        if (safeName.isEmpty()) {
+            System.err.println("[ERROR DESCARGA] Debes indicar un nombre de archivo valido.");
+            return;
+        }
+        String sessionId = null;
         try {
-            String sessionId = room == null
+            sessionId = room == null
                     ? chatPrx.startDownload(fileName, nickname)
                     : chatPrx.startRoomDownload(fileName, nickname, room);
             File downloadDir = new File("downloads");
-            if (!downloadDir.exists()) {
-                downloadDir.mkdirs();
+            if (!downloadDir.isDirectory() && !downloadDir.mkdirs()) {
+                throw new IOException("No se pudo crear la carpeta de descargas.");
             }
 
-            File localFile = new File(downloadDir, fileName);
-            System.out.println(">>> Descargando '" + fileName + "'...");
+            File localFile = new File(downloadDir, safeName);
+            System.out.println(">>> Descargando '" + safeName + "'...");
 
             try (FileOutputStream fos = new FileOutputStream(localFile)) {
                 long offset = 0;
@@ -534,14 +563,21 @@ public class ClientMain {
                     fos.write(chunk);
                     offset += chunk.length;
                 }
-                chatPrx.closeDownload(sessionId);
                 System.out.println(">>> Archivo guardado con exito en: " + localFile.getPath());
             }
 
         } catch (ChatException ce) {
             System.err.println("[ERROR DESCARGA] " + ce.reason);
         } catch (Exception e) {
-            System.err.println("[ERROR RED] " + e.getMessage());
+            System.err.println("[ERROR DESCARGA] " + errorMessage(e));
+        } finally {
+            if (sessionId != null) {
+                try {
+                    chatPrx.closeDownload(sessionId);
+                } catch (Exception e) {
+                    System.err.println("[AVISO] No se pudo cerrar la sesion de descarga: " + errorMessage(e));
+                }
+            }
         }
     }
 }

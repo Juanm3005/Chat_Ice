@@ -13,16 +13,17 @@ public class ServerMain {
             ObjectAdapter adapter = communicator.createObjectAdapterWithEndpoints(
                     "ChatAdapter", "default -p 10000");
 
-            // 2. Instanciar el Servant y registrarlo con identidad 'ChatService'
-            ChatRoomI servant = new ChatRoomI();
-            adapter.add(servant, Util.stringToIdentity("ChatService"));
+            // Registrar ambos servicios en el mismo endpoint Ice.
+            ChatRoomI chatService = new ChatRoomI();
+            adapter.add(chatService, Util.stringToIdentity("ChatService"));
+            adapter.add(new CallServiceI(chatService), Util.stringToIdentity("CallService"));
 
             // 3. Activar el adaptador para recibir llamadas RPC
             adapter.activate();
             System.out.println("===============================================");
             System.out.println("* SERVIDOR ZEROC ICE INICIADO EXITOSAMENTE *");
             System.out.println("* Puerto TCP: 10000 | Endpoint: default -p 10000 *");
-            System.out.println("* Identidad del Servicio: ChatService *");
+            System.out.println("* Servicios: ChatService y CallService *");
             System.out.println("===============================================");
 
             // 4. Bloquear el hilo principal hasta orden de apagado (Ctrl+C)
