@@ -59,4 +59,23 @@ module ChatApp {
         ByteSeq readChunk(string sessionId, long offset, long size);
         void closeDownload(string sessionId);
     };
+        exception CallException {
+            string reason;
+        };
+
+        interface CallCallback {
+            void incomingCall(long callId, string caller, string ip, int port);
+            void callAccepted(long callId, string callee, string ip, int port);
+            void callRejected(long callId, string callee);
+            void callEnded(long callId, string byUser);
+        };
+
+        interface CallService {
+            void registerCallback(string nickname, CallCallback* cb) throws CallException;
+            void unregisterCallback(string nickname);
+            long startCall(string caller, string callee, string ip, int port) throws CallException;
+            void acceptCall(long callId, string callee, string ip, int port) throws CallException;
+            void rejectCall(long callId, string callee) throws CallException;
+            void hangUp(long callId, string user) throws CallException;
+        };
 };
