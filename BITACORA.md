@@ -1,0 +1,18 @@
+# Bitacora de uso de Inteligencia Artificial Generativa
+
+## Registro de interacciones principales
+
+| Etapa | Solicitud principal al asistente | Apoyo de IA y resultado | Revision y control humano |
+| --- | --- | --- | --- |
+| Revision inicial | "No cambies nada, solo lee, revisa todo el repositorio y dime si todo funciona, que aspectos se deben mejorar y que falta por implementar". | Inspeccion del proyecto, guia y configuracion; identificacion de problemas de ejecucion y propuesta de pasos para ejecutar y verificar. | Primero se solicito expresamente una revision sin cambios. Los hallazgos se usaron para decidir que corregir despues. |
+| Correcciones y README | "Ayudame con el codigo de CleintMain, corrigiendo los errores tanto los que viste como alguno otro que pueda existir, y con la documentacion del diagrama del proyecto segun la idea del archivo adjunto". | Se propusieron y aplicaron correcciones en el registro de servicios Ice, el flujo y cierre del cliente y la transferencia de archivos; se amplio el README con requisitos, ejecucion, comandos y verificacion manual. | La compilacion Gradle y pruebas manuales se realizaron en una copia temporal; se probaron chat, salas y transferencias, y se compararon descargas mediante SHA-256. No se afirmo cobertura de pruebas automatizadas ni verificacion fisica del audio. |
+| Colaboracion en repositorio compartido | Consulta sobre como integrar los cambios sin interferir con el trabajo del equipo y posterior solicitud para verificar el envio. | Se explico el uso de una rama y staging selectivo; se verifico que el PR #7 habia sido fusionado. | Se advirtio que artefactos de Gradle, clases compiladas y fuentes generadas no debian agregarse accidentalmente. |
+| Documentacion final | "Ayudame a mejorar el formato de la documentacion y darle mas organizacion" y consulta sobre si los cambios habian alterado trabajo de companeros. | Se reviso la guia, se preparo un diagrama de arquitectura, se redactaron respuestas tecnicas y se comparo el historial Git para describir los cambios en archivos compartidos. | El equipo debe confirmar los detalles de autoria informal y validar que comprende las explicaciones antes de presentarlas. El analisis de commits se mantuvo separado de esta bitacora de uso de IA. |
+
+## Codigo asistido por IA y adaptacion
+
+| Archivo | Codigo o comportamiento asistido | Adaptacion y verificacion documentada |
+| --- | --- | --- |
+| `server/src/main/java/chat/server/ServerMain.java` | Registro del servicio de llamadas junto al servicio de chat en el adaptador Ice. | Se mantuvo el endpoint del servidor y el registro coherente con los proxies que utiliza el cliente; la compilacion y el arranque manual del cliente/servidor se probaron en una copia temporal. |
+| `client/src/main/java/chat/client/ClientMain.java` | Validacion de comandos vacios, salida ante fin de entrada y cierre ordenado de sesion; integracion del servicio de llamadas y transferencia de archivos por bloques. | Se ajusto al flujo de comandos existente. Se probaron manualmente el chat, las salas y las transferencias; no se afirma que el microfono o el audio se hayan validado fisicamente. |
+| `server/src/main/java/chat/server/ChatRoomI.java` | Manejo de transferencias privadas, nombres de archivo, lectura por bloques y acceso concurrente a transferencias. | Se adapto a las sesiones y almacenamiento del proyecto. Se compararon hashes SHA-256 de archivos descargados durante las pruebas manuales reportadas. |
