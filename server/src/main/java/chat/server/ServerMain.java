@@ -16,7 +16,6 @@ public class ServerMain {
             // 2. Instanciar el Servant y registrarlo con identidad 'ChatService'
             ChatRoomI servant = new ChatRoomI();
             adapter.add(servant, Util.stringToIdentity("ChatService"));
-            adapter.add(new CallServiceI(servant), Util.stringToIdentity("CallService"));
 
             // 3. Activar el adaptador para recibir llamadas RPC
             adapter.activate();
@@ -25,7 +24,6 @@ public class ServerMain {
             System.out.println("* Puerto TCP: 10000 | Endpoint: default -p 10000 *");
             System.out.println("* Identidad del Servicio: ChatService *");
             System.out.println("===============================================");
-            System.out.println("Esperando llamadas remotas de clientes...");
 
             // 4. Bloquear el hilo principal hasta orden de apagado (Ctrl+C)
             communicator.waitForShutdown();

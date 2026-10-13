@@ -133,12 +133,12 @@ public interface CallServicePrx extends com.zeroc.Ice.ObjectPrx
         }
     }
 
-    default java.util.concurrent.CompletableFuture<java.lang.Long> startCallAsync(String caller, String callee, String ip, int port)
+    default java.util.concurrent.CompletableFuture<Long> startCallAsync(String caller, String callee, String ip, int port)
     {
         return _iceI_startCallAsync(caller, callee, ip, port, com.zeroc.Ice.ObjectPrx.noExplicitContext, false);
     }
 
-    default java.util.concurrent.CompletableFuture<java.lang.Long> startCallAsync(String caller, String callee, String ip, int port, java.util.Map<String, String> context)
+    default java.util.concurrent.CompletableFuture<Long> startCallAsync(String caller, String callee, String ip, int port, java.util.Map<String, String> context)
     {
         return _iceI_startCallAsync(caller, callee, ip, port, context, false);
     }
@@ -153,9 +153,9 @@ public interface CallServicePrx extends com.zeroc.Ice.ObjectPrx
      * @param sync -
      * @return -
      **/
-    default com.zeroc.IceInternal.OutgoingAsync<java.lang.Long> _iceI_startCallAsync(String iceP_caller, String iceP_callee, String iceP_ip, int iceP_port, java.util.Map<String, String> context, boolean sync)
+    default com.zeroc.IceInternal.OutgoingAsync<Long> _iceI_startCallAsync(String iceP_caller, String iceP_callee, String iceP_ip, int iceP_port, java.util.Map<String, String> context, boolean sync)
     {
-        com.zeroc.IceInternal.OutgoingAsync<java.lang.Long> f = new com.zeroc.IceInternal.OutgoingAsync<>(this, "startCall", null, sync, _iceE_startCall);
+        com.zeroc.IceInternal.OutgoingAsync<Long> f = new com.zeroc.IceInternal.OutgoingAsync<>(this, "startCall", null, sync, _iceE_startCall);
         f.invoke(true, context, null, ostr -> {
                      ostr.writeString(iceP_caller);
                      ostr.writeString(iceP_callee);

@@ -27,15 +27,16 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ClientMain {
     private static volatile boolean running = true;
     private static long lastReceivedId = 0;
-    // Conversacion activa: chat general o ventana privada abierta con /msg
+    // Conversacion activa: chat general o ventana privada/sala abierta
     private static final ConversationContext conversation = new ConversationContext();
     private static final Set<String> joinedRooms = ConcurrentHashMap.newKeySet();
 
     public static void main(String[] args) {
         // Inicializar el Communicator del cliente
         try (Communicator communicator = Util.initialize(args)) {
+            final String serverHost = args.length > 0 ? args[0] : "127.0.0.1";
             // 1. Obtener proxy base y realizar casting seguro hacia ChatRoomPrx
-            String proxyString = "ChatService:default -h 127.0.0.1 -p 10000";
+            String proxyString = "ChatService:default -h " + serverHost + " -p 10000";
             ObjectPrx base = communicator.stringToProxy(proxyString);
             ChatRoomPrx chatPrx = ChatRoomPrx.checkedCast(base);
 
@@ -67,21 +68,29 @@ public class ClientMain {
 
             final String activeUser = nickname;
 
-            // Registro del callback: el servidor usara este proxy para notificar eventos
-            registerCallback(communicator, chatPrx, activeUser);
+            // Registro del callback de chat
+            ObjectAdapter callbackAdapter = registerCallback(communicator, chatPrx, activeUser);
 
-            String callProxyString = "CallService:default -h 127.0.0.1 -p 10000";
-            CallServicePrx callPrx = CallServicePrx.checkedCast(communicator.stringToProxy(callProxyString));
-
-            String myIp = detectLocalIp("127.0.0.1");
-            CallManager callMgr = null;
-            if (callPrx != null) {
-                callMgr = new CallManager(activeUser, myIp, callPrx, conversation::prompt);
-                registerCallCallback(communicator, callPrx, activeUser, callMgr);
+            // Registro del servicio de llamadas (RF-05)
+            CallServicePrx callPrx = CallServicePrx.checkedCast(
+                    communicator.stringToProxy("CallService:default -h " + serverHost + " -p 10000"));
+            if (callPrx == null) {
+                System.err.println("[ERROR] El servidor no ofrece el servicio de llamadas.");
+                return;
+            }
+            CallManager callManager = new CallManager(activeUser, detectLocalIp(serverHost), callPrx,
+                    conversation::prompt);
+            CallCallbackPrx callbackPrx = CallCallbackPrx.uncheckedCast(
+                    callbackAdapter.addWithUUID(new CallCallbackI(callManager)));
+            callPrx.ice_getConnection().setAdapter(callbackAdapter);
+            try {
+                callPrx.registerCallback(activeUser, callbackPrx);
+            } catch (CallException ce) {
+                System.err.println("[ERROR] No se pudo registrar el callback de llamadas: " + ce.reason);
+                return;
             }
 
-            // 3. Hilo demonio en segundo plano: Sondeo continuo de mensajes (Polling no
-            // bloqueante)
+            // 3. Hilo demonio en segundo plano: Sondeo continuo de mensajes (Polling no bloqueante)
             Thread listenerThread = new Thread(() -> {
                 while (running) {
                     try {
@@ -92,7 +101,6 @@ public class ClientMain {
                             }
                             // Mostrar mensaje solo si no fue enviado por el propio usuario
                             if (!msg.sender.equals(activeUser)) {
-                                // Dentro de una ventana privada se marca el origen del mensaje
                                 String origin = conversation.getMode() == ConversationContext.Mode.GENERAL
                                         ? "" : "[General] ";
                                 printAsync(origin + "[" + msg.timestamp + "] <" + msg.sender + ">: " + msg.text);
@@ -118,10 +126,9 @@ public class ClientMain {
 
                 if (input.equalsIgnoreCase("/exit")) {
                     running = false;
-                    if (callMgr != null) {
-                        callMgr.shutdown();
-                    }
+                    callManager.shutdown();
                     try {
+                        callPrx.unregisterCallback(activeUser);
                         chatPrx.logout(activeUser);
                     } catch (Exception ignored) {
                     }
@@ -129,7 +136,7 @@ public class ClientMain {
                     break;
                 } else if (input.equals("/msg") || input.startsWith("/msg ")) {
                     openPrivateChat(chatPrx, activeUser, input.substring(4).trim());
-                                } else if (input.equalsIgnoreCase("/closew") || input.equalsIgnoreCase("/general")) {
+                } else if (input.equalsIgnoreCase("/closew") || input.equalsIgnoreCase("/general")) {
                     closeConversation();
                 } else if (input.equalsIgnoreCase("/rooms")) {
                     listRooms(chatPrx);
@@ -143,6 +150,19 @@ public class ClientMain {
                     switchRoom(argument(input));
                 } else if (input.equals("/members") || input.startsWith("/members ")) {
                     showMembers(chatPrx, argument(input));
+                } else if (input.equals("/call") || input.startsWith("/call ")) {
+                    String target = input.substring(5).trim();
+                    if (target.isEmpty()) {
+                        System.out.println(" || Debes usar la siguiente estructura: /call <usuario>");
+                    } else {
+                        callManager.call(target);
+                    }
+                } else if (input.equalsIgnoreCase("/accept")) {
+                    callManager.accept();
+                } else if (input.equalsIgnoreCase("/reject")) {
+                    callManager.reject();
+                } else if (input.equalsIgnoreCase("/hangup")) {
+                    callManager.hangup();
                 } else if (input.equalsIgnoreCase("/help")) {
                     printHelp();
                 } else if (input.equalsIgnoreCase("/users")) {
@@ -156,13 +176,12 @@ public class ClientMain {
                 } else if (input.startsWith("/upload")) {
                     String filePath = input.substring(8).trim();
                     if (!filePath.isEmpty()) {
-                        // En una ventana privada el archivo solo se comparte con el destinatario
                         ConversationContext.Mode mode = conversation.getMode();
                         String target = mode == ConversationContext.Mode.PRIVATE ? conversation.getTarget() : null;
                         String room = mode == ConversationContext.Mode.ROOM ? conversation.getTarget() : null;
                         uploadFile(chatPrx, activeUser, target, room, filePath);
                     } else {
-                        System.out.println(" || Debes usar la sigueinte estructura: /upload<ruta_del_archivo>");
+                        System.out.println(" || Debes usar la siguiente estructura: /upload <ruta_del_archivo>");
                     }
                 } else if (input.startsWith("/download")) {
                     String fileName = input.substring(10).trim();
@@ -171,30 +190,7 @@ public class ClientMain {
                                 ? conversation.getTarget() : null;
                         downloadFile(chatPrx, activeUser, fileName, room);
                     } else {
-                        System.out.println(" || Debes usar la sigueinte estructura: /download<ruta_del_archivo>");
-                    }
-                } else if (input.equals("/call") || input.startsWith("/call ")) {
-                    if (callMgr == null) {
-                        System.out.println("[ERROR] Servicio de llamadas no disponible.");
-                    } else {
-                        String target = input.length() > 5 ? input.substring(6).trim() : "";
-                        if (target.isEmpty()) {
-                            System.out.println("Uso: /call <usuario>");
-                        } else {
-                            callMgr.call(target);
-                        }
-                    }
-                } else if (input.equalsIgnoreCase("/accept")) {
-                    if (callMgr != null) {
-                        callMgr.accept();
-                    }
-                } else if (input.equalsIgnoreCase("/reject")) {
-                    if (callMgr != null) {
-                        callMgr.reject();
-                    }
-                } else if (input.equalsIgnoreCase("/hangup")) {
-                    if (callMgr != null) {
-                        callMgr.hangup();
+                        System.out.println(" || Debes usar la siguiente estructura: /download <nombre_del_archivo>");
                     }
                 } else if (!input.isEmpty() && conversation.getMode() == ConversationContext.Mode.PRIVATE) {
                     sendPrivate(chatPrx, activeUser, conversation.getTarget(), input);
@@ -243,7 +239,7 @@ public class ClientMain {
     // Crea un adaptador sin endpoints y lo asocia a la conexion ya abierta con el servidor
     // (conexion bidireccional). Asi el servidor puede invocar al cliente sin que este abra
     // puertos, lo que funciona igual en localhost y entre maquinas de la red.
-    private static void registerCallback(Communicator communicator, ChatRoomPrx chatPrx, String nickname)
+    private static ObjectAdapter registerCallback(Communicator communicator, ChatRoomPrx chatPrx, String nickname)
             throws ChatException {
         ObjectAdapter adapter = communicator.createObjectAdapter("");
         ChatClientI servant = new ChatClientI(ClientMain::onPrivateMessage, ClientMain::onRoomMessage);
@@ -251,16 +247,7 @@ public class ClientMain {
         adapter.activate();
         chatPrx.ice_getConnection().setAdapter(adapter);
         chatPrx.registerCallback(nickname, callbackPrx);
-    }
-
-    private static void registerCallCallback(Communicator communicator, CallServicePrx callPrx,
-                                             String nickname, CallManager mgr) throws CallException {
-        ObjectAdapter adapter = communicator.createObjectAdapter("");
-        CallCallbackI servant = new CallCallbackI(mgr);
-        CallCallbackPrx callbackPrx = CallCallbackPrx.uncheckedCast(adapter.addWithUUID(servant));
-        adapter.activate();
-        callPrx.ice_getConnection().setAdapter(adapter);
-        callPrx.registerCallback(nickname, callbackPrx);
+        return adapter;
     }
 
     private static String detectLocalIp(String serverHost) {
@@ -282,7 +269,7 @@ public class ClientMain {
         }
     }
 
-        // Se ejecuta en el hilo de Ice cuando el servidor entrega un mensaje de una sala.
+    // Se ejecuta en el hilo de Ice cuando el servidor entrega un mensaje de una sala.
     // Si la sala no es la ventana activa, se marca el origen para que el usuario pueda cambiar a ella
     private static void onRoomMessage(String room, ChatMessage msg) {
         if (conversation.isRoom(room)) {
@@ -442,7 +429,6 @@ public class ClientMain {
         }
     }
 
-    // /msg <usuario> [texto]: abre la ventana privada y opcionalmente envia el primer mensaje
     private static void openPrivateChat(ChatRoomPrx chatPrx, String activeUser, String args) {
         if (args.isEmpty()) {
             System.out.println(" || Debes usar la siguiente estructura: /msg <usuario> [texto]");
@@ -482,15 +468,14 @@ public class ClientMain {
         }
     }
 
-    // Imprime un mensaje que llega de forma asincrona y vuelve a mostrar el prompt actual
     private static synchronized void printAsync(String line) {
         System.out.println("\n" + line);
         System.out.print(conversation.prompt());
     }
 
     // target null = archivo para toda la sala; si no, archivo privado para ese usuario
-    private static void uploadFile(ChatRoomPrx chatPrx, String nickname, String target, String room,
-            String pathStr) {        File file = new File(pathStr);
+    private static void uploadFile(ChatRoomPrx chatPrx, String nickname, String target, String room, String pathStr) {
+        File file = new File(pathStr);
         if (!file.exists() || !file.isFile()) {
             System.err.println("[ERROR] El archivo no existe o no es valido: " + pathStr);
             return;
@@ -499,14 +484,11 @@ public class ClientMain {
         System.out.println(">>> Subiendo " + file.getName() + " (" + file.length() + " bytes)...");
 
         try (FileInputStream fis = new FileInputStream(file)) {
-            String sessionId;
-            if (room != null) {
-                sessionId = chatPrx.startRoomUpload(file.getName(), nickname, room);
-            } else if (target != null) {
-                sessionId = chatPrx.startPrivateUpload(file.getName(), nickname, target);
-            } else {
-                sessionId = chatPrx.startUpload(file.getName(), nickname);
-            }
+            String sessionId = room != null
+                    ? chatPrx.startRoomUpload(file.getName(), nickname, room)
+                    : target == null
+                            ? chatPrx.startUpload(file.getName(), nickname)
+                            : chatPrx.startPrivateUpload(file.getName(), nickname, target);
 
             byte[] buffer = new byte[32 * 1024];
             int bytesRead;
@@ -520,9 +502,7 @@ public class ClientMain {
                     + (room != null ? " y compartido en la sala " + room + "."
                             : target == null ? "." : " y enviado en privado a " + target + "."));
 
-        } catch (
-
-        ChatException ce) {
+        } catch (ChatException ce) {
             System.err.println("[RECHAZADO] " + ce.reason);
         } catch (Exception e) {
             System.err.println("[ERROR SUBIDA] " + e.getMessage());
@@ -531,7 +511,6 @@ public class ClientMain {
 
     public static void downloadFile(ChatRoomPrx chatPrx, String nickname, String fileName, String room) {
         try {
-
             String sessionId = room == null
                     ? chatPrx.startDownload(fileName, nickname)
                     : chatPrx.startRoomDownload(fileName, nickname, room);
@@ -565,5 +544,4 @@ public class ClientMain {
             System.err.println("[ERROR RED] " + e.getMessage());
         }
     }
-
 }
