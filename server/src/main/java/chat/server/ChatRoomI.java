@@ -3,7 +3,6 @@ package chat.server;
 import ChatApp.ChatClientPrx;
 import ChatApp.ChatException;
 import ChatApp.ChatMessage;
-import ChatApp.ChatRoom;
 import com.zeroc.Ice.Current;
 
 import java.io.File;
@@ -28,8 +27,8 @@ public class ChatRoomI implements ChatApp.ChatRoom {
     private final File storageDir = new File("chat_files");
     // Los archivos privados van en su propia carpeta para no pisar archivos de la sala
     private final File privateStorageDir = new File(storageDir, "private");
-    // Archivo privado -> usuarios autorizados a descargarlo (remitente y destinatario)
-    private final Map<String, Set<String>> privateFiles = new ConcurrentHashMap<>();
+    // Archivo privado por usuario y nombre -> archivo almacenado en disco
+    private final Map<String, File> privateFiles = new ConcurrentHashMap<>();
     private final Map<String, UploadSession> activeUploads = new ConcurrentHashMap<>();
     private final Map<String, DownloadSession> activeDownloads = new ConcurrentHashMap<>();
 
@@ -61,7 +60,7 @@ public class ChatRoomI implements ChatApp.ChatRoom {
     }
 
     @Override
-    public void postMessage(String nickname, String message, Current current) throws ChatException {
+    public synchronized void postMessage(String nickname, String message, Current current) throws ChatException {
         if (!onlineUsers.contains(nickname)) {
             throw new ChatException(" Acceso denegado : El usuario debe iniciar sesion primero .");
         }
@@ -200,15 +199,22 @@ public class ChatRoomI implements ChatApp.ChatRoom {
         throws ChatException {
         try {
             if (!dir.exists()) {
-                dir.mkdirs();
+                if (!dir.mkdirs() && !dir.isDirectory()) {
+                    throw new IOException("No se pudo crear la carpeta de almacenamiento.");
+                }
             }
 
             String safeName = new File(fileName).getName();
-            File destFile = new File(dir, safeName);
+            if (safeName.isEmpty()) {
+                throw new IOException("El nombre del archivo no es valido.");
+            }
+            File destFile = target == null
+                    ? new File(dir, safeName)
+                    : new File(dir, UUID.randomUUID() + "-" + safeName);
             FileOutputStream fos = new FileOutputStream(destFile);
 
             String sessionId = UUID.randomUUID().toString();
-            activeUploads.put(sessionId, new UploadSession(safeName, sender, fos, target, room));
+            activeUploads.put(sessionId, new UploadSession(safeName, sender, destFile, fos, target, room));
 
             String scope = room != null ? " para la sala " + room : target == null ? "" : " para " + target + " (privado)";
             System.out.println(
@@ -234,7 +240,7 @@ public class ChatRoomI implements ChatApp.ChatRoom {
     }
 
     @Override
-    public void closeUpload(String sessionId, Current current) {
+    public synchronized void closeUpload(String sessionId, Current current) {
         UploadSession session = activeUploads.remove(sessionId);
         if (session != null) {
             try {
@@ -256,7 +262,8 @@ public class ChatRoomI implements ChatApp.ChatRoom {
                 if (session.target != null) {
                     // Archivo privado: solo remitente y destinatario pueden descargarlo,
                     // y solo el destinatario recibe el aviso (por callback, como un mensaje privado)
-                    privateFiles.put(session.fileName, Set.of(session.sender, session.target));
+                    privateFiles.put(privateFileKey(session.sender, session.fileName), session.file);
+                    privateFiles.put(privateFileKey(session.target, session.fileName), session.file);
                     notifyPrivateFile(session, new ChatMessage(id, session.sender,
                             "te ha enviado el archivo: " + session.fileName
                                     + " (usa /download " + session.fileName + ")", now));
@@ -298,11 +305,11 @@ public class ChatRoomI implements ChatApp.ChatRoom {
                 throw new ChatException("Acceso denegado");
             }
             String safeName = new File(fileName).getName();
-            // Si el archivo fue compartido en privado con este usuario se sirve desde la
-            // carpeta privada; si no, desde la carpeta publica de la sala
-            Set<String> allowed = privateFiles.get(safeName);
-            File dir = allowed != null && allowed.contains(nickname) ? privateStorageDir : storageDir;
-            File destFile = new File(dir, safeName);
+            if (safeName.isEmpty()) {
+                throw new ChatException("El nombre del archivo no es valido.");
+            }
+            File privateFile = privateFiles.get(privateFileKey(nickname, safeName));
+            File destFile = privateFile != null ? privateFile : new File(storageDir, safeName);
             FileInputStream fis = new FileInputStream(destFile);
 
             String sessionId = UUID.randomUUID().toString();
@@ -318,9 +325,11 @@ public class ChatRoomI implements ChatApp.ChatRoom {
     @Override
     public byte[] readChunk(String sessionId, long offset, long size, Current current) {
         DownloadSession session = activeDownloads.get(sessionId);
-        if (session != null) {
+        if (session != null && offset >= 0 && size > 0) {
             try {
-                return session.inputStream.readNBytes((int) size);
+                session.inputStream.getChannel().position(offset);
+                int chunkSize = (int) Math.min(size, 32 * 1024);
+                return session.inputStream.readNBytes(chunkSize);
             } catch (Exception e) {
                 System.err.println("[ERROR DOWNLOAD] Fallo leyendo bloque: " + e.getMessage());
             }
@@ -420,6 +429,9 @@ public class ChatRoomI implements ChatApp.ChatRoom {
         Room r = requireMember(nickname, room);
         // getName() descarta cualquier ruta que venga en el nombre (evita "../")
         String safeName = new File(fileName).getName();
+        if (safeName.isEmpty()) {
+            throw new ChatException("El nombre del archivo no es valido.");
+        }
         File file = new File(new File(roomStorageDir, r.name), safeName);
         if (!file.isFile()) {
             throw new ChatException("El archivo '" + safeName + "' no existe en la sala '" + r.name + "'.");
@@ -461,6 +473,10 @@ public class ChatRoomI implements ChatApp.ChatRoom {
     private ChatMessage systemMessage(String text) {
         return new ChatMessage(messageIdCounter.incrementAndGet(), "SISTEMA", text,
                 LocalTime.now().format(timeFormat));
+    }
+
+    private String privateFileKey(String nickname, String fileName) {
+        return nickname + '\0' + fileName;
     }
 
     // Envia el mensaje a cada miembro de la sala por su callback, de forma asincrona para que
