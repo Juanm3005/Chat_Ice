@@ -15,6 +15,9 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
+import ChatApp.RoomInfo; 
+import java.io.IOException;     
+import java.util.regex.Pattern;
 
 public class ChatRoomI implements ChatApp.ChatRoom {
     private final Set<String> onlineUsers = ConcurrentHashMap.newKeySet();
@@ -32,6 +35,12 @@ public class ChatRoomI implements ChatApp.ChatRoom {
 
     // Proxies de callback de cada usuario conectado.
     private final Map<String, ChatClientPrx> clientCallbacks = new ConcurrentHashMap<>();
+    
+    private static final Pattern ROOM_NAME = Pattern.compile("[A-Za-z0-9_-]{1,30}");
+    private final Map<String, Room> rooms = new ConcurrentHashMap<>();
+
+    // Los archivos de cada sala viven en chat_files/rooms/<sala>/
+    private final File roomStorageDir = new File(storageDir, "rooms");
 
     @Override
     public synchronized void login(String nickname, Current current) throws ChatException {
@@ -141,6 +150,7 @@ public class ChatRoomI implements ChatApp.ChatRoom {
     @Override
     public synchronized void logout(String nickname, Current current) {
         clientCallbacks.remove(nickname);
+        leaveAllRooms(nickname);
         if (onlineUsers.remove(nickname)) {
             System.out.println("[ICE - SERVER ] Usuario desconectado : " + nickname);
             String now = LocalTime.now().format(timeFormat);
@@ -156,7 +166,7 @@ public class ChatRoomI implements ChatApp.ChatRoom {
             throw new ChatException("Acceso denegado: El usuario debe iniciar sesion primero.");
         }
 
-        return openUpload(fileName, nickname, null, storageDir);
+        return openUpload(fileName, nickname, null, null, storageDir);
     }
 
     @Override
@@ -175,11 +185,19 @@ public class ChatRoomI implements ChatApp.ChatRoom {
         if (!onlineUsers.contains(cleanTarget) || !clientCallbacks.containsKey(cleanTarget)) {
             throw new ChatException("El usuario '" + cleanTarget + "' no existe o se ha desconectado.");
         }
-        return openUpload(fileName, sender, cleanTarget, privateStorageDir);
+        return openUpload(fileName, sender, cleanTarget, null, privateStorageDir);
+    }
+
+    @Override
+    public String startRoomUpload(String fileName, String sender, String room, Current current) throws ChatException {
+        requireLoggedIn(sender);
+        Room r = requireMember(sender, room);
+        return openUpload(fileName, sender, null, r.name, new File(roomStorageDir, r.name));
     }
 
     // Abre el archivo destino y registra la sesion de subida (target null = archivo de la sala)
-    private String openUpload(String fileName, String sender, String target, File dir) throws ChatException {
+    private String openUpload(String fileName, String sender, String target, String room, File dir)
+        throws ChatException {
         try {
             if (!dir.exists()) {
                 dir.mkdirs();
@@ -190,9 +208,9 @@ public class ChatRoomI implements ChatApp.ChatRoom {
             FileOutputStream fos = new FileOutputStream(destFile);
 
             String sessionId = UUID.randomUUID().toString();
-            activeUploads.put(sessionId, new UploadSession(safeName, sender, fos, target));
+            activeUploads.put(sessionId, new UploadSession(safeName, sender, fos, target, room));
 
-            String scope = target == null ? "" : " para " + target + " (privado)";
+            String scope = room != null ? " para la sala " + room : target == null ? "" : " para " + target + " (privado)";
             System.out.println(
                     "[UPLOAD] Iniciando subida de: " + safeName + " por " + sender + scope + " (Sesion: " + sessionId
                             + ") (para descargar e archivo usa /download<nombre_del_archivo>)");
@@ -225,6 +243,16 @@ public class ChatRoomI implements ChatApp.ChatRoom {
 
                 String now = LocalTime.now().format(timeFormat);
                 long id = messageIdCounter.incrementAndGet();
+                                if (session.room != null) {
+                    Room room = rooms.get(session.room);
+                    if (room != null) {
+                        broadcastRoom(room, new ChatMessage(id, session.sender,
+                                "ha compartido el archivo: " + session.fileName
+                                        + " (usa /download " + session.fileName + ")", now),
+                                session.sender);
+                    }
+                    return;
+                }
                 if (session.target != null) {
                     // Archivo privado: solo remitente y destinatario pueden descargarlo,
                     // y solo el destinatario recibe el aviso (por callback, como un mensaje privado)
@@ -309,6 +337,156 @@ public class ChatRoomI implements ChatApp.ChatRoom {
                 System.out.println("[DOWNLOAD] Archivo completado: " + session.fileName);
             } catch (Exception e) {
                 System.err.println("[ERROR DOWNLOAD] Error cerrando el archivo: " + e.getMessage());
+            }
+        }
+    }
+
+    @Override
+    public void createRoom(String nickname, String room, Current current) throws ChatException {
+        requireLoggedIn(nickname);
+        String name = room == null ? "" : room.trim();
+        if (!ROOM_NAME.matcher(name).matches()) {
+            throw new ChatException("Nombre de sala invalido. Usa de 1 a 30 caracteres: letras, numeros, '_' o '-'.");
+        }
+        Room newRoom = new Room(name, nickname);
+        newRoom.members.add(nickname);
+        // putIfAbsent es atomico: si dos usuarios crean el mismo nombre a la vez, solo uno lo logra
+        if (rooms.putIfAbsent(name, newRoom) != null) {
+            throw new ChatException("La sala '" + name + "' ya existe.");
+        }
+        System.out.println("[SALA] '" + name + "' creada por " + nickname);
+    }
+
+    @Override
+    public RoomInfo[] listRooms(Current current) {
+        List<RoomInfo> list = new ArrayList<>();
+        for (Room r : rooms.values()) {
+            list.add(new RoomInfo(r.name, r.creator, r.members.size()));
+        }
+        list.sort((a, b) -> a.name.compareTo(b.name));
+        return list.toArray(new RoomInfo[0]);
+    }
+
+    @Override
+    public void joinRoom(String nickname, String room, Current current) throws ChatException {
+        requireLoggedIn(nickname);
+        Room r = requireRoom(room);
+        if (!r.members.add(nickname)) {
+            throw new ChatException("Ya perteneces a la sala '" + r.name + "'.");
+        }
+        System.out.println("[SALA] " + nickname + " se unio a '" + r.name + "'");
+        broadcastRoom(r, systemMessage(nickname + " se unio a la sala."), nickname);
+    }
+
+    @Override
+    public void leaveRoom(String nickname, String room, Current current) throws ChatException {
+        requireLoggedIn(nickname);
+        Room r = requireRoom(room);
+        if (!r.members.remove(nickname)) {
+            throw new ChatException("No perteneces a la sala '" + r.name + "'.");
+        }
+        System.out.println("[SALA] " + nickname + " salio de '" + r.name + "'");
+        broadcastRoom(r, systemMessage(nickname + " salio de la sala."), nickname);
+    }
+
+    @Override
+    public String[] getRoomMembers(String room, Current current) throws ChatException {
+        Room r = requireRoom(room);
+        String[] members = r.members.toArray(new String[0]);
+        Arrays.sort(members);
+        return members;
+    }
+
+    @Override
+    public void sendRoomMessage(String sender, String room, String message, Current current)
+            throws ChatException {
+        requireLoggedIn(sender);
+        // Solo los miembros pueden escribir: esto garantiza el aislamiento entre grupos
+        Room r = requireMember(sender, room);
+        if (message == null || message.trim().isEmpty()) {
+            return;
+        }
+        String now = LocalTime.now().format(timeFormat);
+        ChatMessage msg = new ChatMessage(messageIdCounter.incrementAndGet(), sender, message.trim(), now);
+        // El mensaje se difunde a todos los miembros menos al emisor (sin duplicado)
+        broadcastRoom(r, msg, sender);
+        System.out.println("[" + now + "] <" + sender + " -> #" + r.name + "> (sala)");
+    }
+
+    @Override
+    public String startRoomDownload(String fileName, String nickname, String room, Current current)
+            throws ChatException {
+        requireLoggedIn(nickname);
+        Room r = requireMember(nickname, room);
+        // getName() descarta cualquier ruta que venga en el nombre (evita "../")
+        String safeName = new File(fileName).getName();
+        File file = new File(new File(roomStorageDir, r.name), safeName);
+        if (!file.isFile()) {
+            throw new ChatException("El archivo '" + safeName + "' no existe en la sala '" + r.name + "'.");
+        }
+        try {
+            FileInputStream fis = new FileInputStream(file);
+            String sessionId = UUID.randomUUID().toString();
+            activeDownloads.put(sessionId, new DownloadSession(safeName, nickname, fis));
+            return sessionId;
+        } catch (IOException e) {
+            throw new ChatException("Error al preparar descarga en el servidor: " + e.getMessage());
+        }
+    }
+
+    //utilidades de salas 
+
+    private void requireLoggedIn(String nickname) throws ChatException {
+        if (nickname == null || !onlineUsers.contains(nickname)) {
+            throw new ChatException("Acceso denegado: El usuario debe iniciar sesion primero.");
+        }
+    }
+
+    private Room requireRoom(String room) throws ChatException {
+        Room r = room == null ? null : rooms.get(room.trim());
+        if (r == null) {
+            throw new ChatException("La sala '" + room + "' no existe. Usa /rooms para ver las disponibles.");
+        }
+        return r;
+    }
+
+    private Room requireMember(String nickname, String room) throws ChatException {
+        Room r = requireRoom(room);
+        if (!r.members.contains(nickname)) {
+            throw new ChatException("No perteneces a la sala '" + r.name + "'. Usa /join " + r.name + ".");
+        }
+        return r;
+    }
+
+    private ChatMessage systemMessage(String text) {
+        return new ChatMessage(messageIdCounter.incrementAndGet(), "SISTEMA", text,
+                LocalTime.now().format(timeFormat));
+    }
+
+    // Envia el mensaje a cada miembro de la sala por su callback, de forma asincrona para que
+    // un cliente lento no bloquee a los demas. 'exclude' (puede ser null) no recibe copia.
+    private void broadcastRoom(Room room, ChatMessage msg, String exclude) {
+        for (String member : room.members) {
+            if (member.equals(exclude)) {
+                continue;
+            }
+            ChatClientPrx prx = clientCallbacks.get(member);
+            if (prx == null) {
+                continue;
+            }
+            prx.receiveRoomMessageAsync(room.name, msg).whenComplete((ok, ex) -> {
+                if (ex != null) {
+                    System.err.println("[SALA] No se pudo entregar a " + member + " en '" + room.name + "': " + ex);
+                    removeUnreachableClient(member, prx);
+                }
+            });
+        }
+    }
+
+    private void leaveAllRooms(String nickname) {
+        for (Room r : rooms.values()) {
+            if (r.members.remove(nickname)) {
+                broadcastRoom(r, systemMessage(nickname + " se desconecto."), nickname);
             }
         }
     }

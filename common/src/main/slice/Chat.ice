@@ -10,7 +10,13 @@ module ChatApp {
     // Secuencias tipadas (equivalentes a arreglos/listas en Java)
     sequence<ChatMessage> MessageSeq;
     sequence<string> UserSeq;
-
+    // RF-03: resumen de una sala para el catalogo (/rooms)
+    struct RoomInfo {
+        string name;
+        string creator;
+        int members;
+    };
+    sequence<RoomInfo> RoomInfoSeq;
     // Excepcion de usuario para validaciones de negocio
     exception ChatException {
         string reason;
@@ -24,6 +30,9 @@ module ChatApp {
     interface ChatClient {
         // RF-02: el servidor entrega un mensaje privado dirigido a este cliente
         void receivePrivateMessage(ChatMessage msg);
+        // RF-03: el servidor entrega un mensaje (o aviso de archivo) emitido en una sala
+        // a la que pertenece este cliente. 'room' identifica la sala de origen
+        void receiveRoomMessage(string room, ChatMessage msg);
     };
 
     // Interfaz remota provista por el servidor Ice
@@ -62,5 +71,38 @@ module ChatApp {
         string startDownload(string fileName, string nickname) throws ChatException;
         ByteSeq readChunk(string sessionId, long offset, long size);
         void closeDownload(string sessionId);
+        
+        void createRoom(string nickname, string room) throws ChatException;
+
+        // Catalogo de salas disponibles
+        idempotent RoomInfoSeq listRooms();
+
+        void joinRoom(string nickname, string room) throws ChatException;
+        void leaveRoom(string nickname, string room) throws ChatException;
+        idempotent UserSeq getRoomMembers(string room) throws ChatException;
+        void sendRoomMessage(string sender, string room, string message) throws ChatException;
+    
+        string startRoomUpload(string fileName, string sender, string room) throws ChatException;
+        string startRoomDownload(string fileName, string nickname, string room) throws ChatException;
+    };
+
+    exception CallException {
+        string reason;
+    };
+
+    interface CallCallback {
+        void incomingCall(long callId, string caller, string ip, int port);
+        void callAccepted(long callId, string callee, string ip, int port);
+        void callRejected(long callId, string callee);
+        void callEnded(long callId, string byUser);
+    };
+
+    interface CallService {
+        void registerCallback(string nickname, CallCallback* cb) throws CallException;
+        void unregisterCallback(string nickname);
+        long startCall(string caller, string callee, string ip, int port) throws CallException;
+        void acceptCall(long callId, string callee, string ip, int port) throws CallException;
+        void rejectCall(long callId, string callee) throws CallException;
+        void hangUp(long callId, string user) throws CallException;
     };
 };

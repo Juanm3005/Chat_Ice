@@ -52,6 +52,29 @@ public interface ChatRoom extends com.zeroc.Ice.Object
 
     void closeDownload(String sessionId, com.zeroc.Ice.Current current);
 
+    void createRoom(String nickname, String room, com.zeroc.Ice.Current current)
+        throws ChatException;
+
+    RoomInfo[] listRooms(com.zeroc.Ice.Current current);
+
+    void joinRoom(String nickname, String room, com.zeroc.Ice.Current current)
+        throws ChatException;
+
+    void leaveRoom(String nickname, String room, com.zeroc.Ice.Current current)
+        throws ChatException;
+
+    String[] getRoomMembers(String room, com.zeroc.Ice.Current current)
+        throws ChatException;
+
+    void sendRoomMessage(String sender, String room, String message, com.zeroc.Ice.Current current)
+        throws ChatException;
+
+    String startRoomUpload(String fileName, String sender, String room, com.zeroc.Ice.Current current)
+        throws ChatException;
+
+    String startRoomDownload(String fileName, String nickname, String room, com.zeroc.Ice.Current current)
+        throws ChatException;
+
     /** @hidden */
     static final String[] _iceIds =
     {
@@ -381,25 +404,218 @@ public interface ChatRoom extends com.zeroc.Ice.Object
         return inS.setResult(inS.writeEmptyParams());
     }
 
+    /**
+     * @hidden
+     * @param obj -
+     * @param inS -
+     * @param current -
+     * @return -
+     * @throws com.zeroc.Ice.UserException -
+    **/
+    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_createRoom(ChatRoom obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
+        throws com.zeroc.Ice.UserException
+    {
+        com.zeroc.Ice.Object._iceCheckMode(null, current.mode);
+        com.zeroc.Ice.InputStream istr = inS.startReadParams();
+        String iceP_nickname;
+        String iceP_room;
+        iceP_nickname = istr.readString();
+        iceP_room = istr.readString();
+        inS.endReadParams();
+        obj.createRoom(iceP_nickname, iceP_room, current);
+        return inS.setResult(inS.writeEmptyParams());
+    }
+
+    /**
+     * @hidden
+     * @param obj -
+     * @param inS -
+     * @param current -
+     * @return -
+    **/
+    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_listRooms(ChatRoom obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
+    {
+        com.zeroc.Ice.Object._iceCheckMode(com.zeroc.Ice.OperationMode.Idempotent, current.mode);
+        inS.readEmptyParams();
+        RoomInfo[] ret = obj.listRooms(current);
+        com.zeroc.Ice.OutputStream ostr = inS.startWriteParams();
+        RoomInfoSeqHelper.write(ostr, ret);
+        inS.endWriteParams(ostr);
+        return inS.setResult(ostr);
+    }
+
+    /**
+     * @hidden
+     * @param obj -
+     * @param inS -
+     * @param current -
+     * @return -
+     * @throws com.zeroc.Ice.UserException -
+    **/
+    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_joinRoom(ChatRoom obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
+        throws com.zeroc.Ice.UserException
+    {
+        com.zeroc.Ice.Object._iceCheckMode(null, current.mode);
+        com.zeroc.Ice.InputStream istr = inS.startReadParams();
+        String iceP_nickname;
+        String iceP_room;
+        iceP_nickname = istr.readString();
+        iceP_room = istr.readString();
+        inS.endReadParams();
+        obj.joinRoom(iceP_nickname, iceP_room, current);
+        return inS.setResult(inS.writeEmptyParams());
+    }
+
+    /**
+     * @hidden
+     * @param obj -
+     * @param inS -
+     * @param current -
+     * @return -
+     * @throws com.zeroc.Ice.UserException -
+    **/
+    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_leaveRoom(ChatRoom obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
+        throws com.zeroc.Ice.UserException
+    {
+        com.zeroc.Ice.Object._iceCheckMode(null, current.mode);
+        com.zeroc.Ice.InputStream istr = inS.startReadParams();
+        String iceP_nickname;
+        String iceP_room;
+        iceP_nickname = istr.readString();
+        iceP_room = istr.readString();
+        inS.endReadParams();
+        obj.leaveRoom(iceP_nickname, iceP_room, current);
+        return inS.setResult(inS.writeEmptyParams());
+    }
+
+    /**
+     * @hidden
+     * @param obj -
+     * @param inS -
+     * @param current -
+     * @return -
+     * @throws com.zeroc.Ice.UserException -
+    **/
+    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_getRoomMembers(ChatRoom obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
+        throws com.zeroc.Ice.UserException
+    {
+        com.zeroc.Ice.Object._iceCheckMode(com.zeroc.Ice.OperationMode.Idempotent, current.mode);
+        com.zeroc.Ice.InputStream istr = inS.startReadParams();
+        String iceP_room;
+        iceP_room = istr.readString();
+        inS.endReadParams();
+        String[] ret = obj.getRoomMembers(iceP_room, current);
+        com.zeroc.Ice.OutputStream ostr = inS.startWriteParams();
+        ostr.writeStringSeq(ret);
+        inS.endWriteParams(ostr);
+        return inS.setResult(ostr);
+    }
+
+    /**
+     * @hidden
+     * @param obj -
+     * @param inS -
+     * @param current -
+     * @return -
+     * @throws com.zeroc.Ice.UserException -
+    **/
+    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_sendRoomMessage(ChatRoom obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
+        throws com.zeroc.Ice.UserException
+    {
+        com.zeroc.Ice.Object._iceCheckMode(null, current.mode);
+        com.zeroc.Ice.InputStream istr = inS.startReadParams();
+        String iceP_sender;
+        String iceP_room;
+        String iceP_message;
+        iceP_sender = istr.readString();
+        iceP_room = istr.readString();
+        iceP_message = istr.readString();
+        inS.endReadParams();
+        obj.sendRoomMessage(iceP_sender, iceP_room, iceP_message, current);
+        return inS.setResult(inS.writeEmptyParams());
+    }
+
+    /**
+     * @hidden
+     * @param obj -
+     * @param inS -
+     * @param current -
+     * @return -
+     * @throws com.zeroc.Ice.UserException -
+    **/
+    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_startRoomUpload(ChatRoom obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
+        throws com.zeroc.Ice.UserException
+    {
+        com.zeroc.Ice.Object._iceCheckMode(null, current.mode);
+        com.zeroc.Ice.InputStream istr = inS.startReadParams();
+        String iceP_fileName;
+        String iceP_sender;
+        String iceP_room;
+        iceP_fileName = istr.readString();
+        iceP_sender = istr.readString();
+        iceP_room = istr.readString();
+        inS.endReadParams();
+        String ret = obj.startRoomUpload(iceP_fileName, iceP_sender, iceP_room, current);
+        com.zeroc.Ice.OutputStream ostr = inS.startWriteParams();
+        ostr.writeString(ret);
+        inS.endWriteParams(ostr);
+        return inS.setResult(ostr);
+    }
+
+    /**
+     * @hidden
+     * @param obj -
+     * @param inS -
+     * @param current -
+     * @return -
+     * @throws com.zeroc.Ice.UserException -
+    **/
+    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_startRoomDownload(ChatRoom obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
+        throws com.zeroc.Ice.UserException
+    {
+        com.zeroc.Ice.Object._iceCheckMode(null, current.mode);
+        com.zeroc.Ice.InputStream istr = inS.startReadParams();
+        String iceP_fileName;
+        String iceP_nickname;
+        String iceP_room;
+        iceP_fileName = istr.readString();
+        iceP_nickname = istr.readString();
+        iceP_room = istr.readString();
+        inS.endReadParams();
+        String ret = obj.startRoomDownload(iceP_fileName, iceP_nickname, iceP_room, current);
+        com.zeroc.Ice.OutputStream ostr = inS.startWriteParams();
+        ostr.writeString(ret);
+        inS.endWriteParams(ostr);
+        return inS.setResult(ostr);
+    }
+
     /** @hidden */
     final static String[] _iceOps =
     {
         "closeDownload",
         "closeUpload",
+        "createRoom",
         "getOnlineUsers",
         "getPendingMessages",
+        "getRoomMembers",
         "ice_id",
         "ice_ids",
         "ice_isA",
         "ice_ping",
+        "joinRoom",
+        "leaveRoom",
+        "listRooms",
         "login",
         "logout",
         "postMessage",
         "readChunk",
         "registerCallback",
         "sendPrivateMessage",
+        "sendRoomMessage",
         "startDownload",
         "startPrivateUpload",
+        "startRoomDownload",
+        "startRoomUpload",
         "startUpload",
         "writeChunk"
     };
@@ -427,65 +643,97 @@ public interface ChatRoom extends com.zeroc.Ice.Object
             }
             case 2:
             {
-                return _iceD_getOnlineUsers(this, in, current);
+                return _iceD_createRoom(this, in, current);
             }
             case 3:
             {
-                return _iceD_getPendingMessages(this, in, current);
+                return _iceD_getOnlineUsers(this, in, current);
             }
             case 4:
             {
-                return com.zeroc.Ice.Object._iceD_ice_id(this, in, current);
+                return _iceD_getPendingMessages(this, in, current);
             }
             case 5:
             {
-                return com.zeroc.Ice.Object._iceD_ice_ids(this, in, current);
+                return _iceD_getRoomMembers(this, in, current);
             }
             case 6:
             {
-                return com.zeroc.Ice.Object._iceD_ice_isA(this, in, current);
+                return com.zeroc.Ice.Object._iceD_ice_id(this, in, current);
             }
             case 7:
             {
-                return com.zeroc.Ice.Object._iceD_ice_ping(this, in, current);
+                return com.zeroc.Ice.Object._iceD_ice_ids(this, in, current);
             }
             case 8:
             {
-                return _iceD_login(this, in, current);
+                return com.zeroc.Ice.Object._iceD_ice_isA(this, in, current);
             }
             case 9:
             {
-                return _iceD_logout(this, in, current);
+                return com.zeroc.Ice.Object._iceD_ice_ping(this, in, current);
             }
             case 10:
             {
-                return _iceD_postMessage(this, in, current);
+                return _iceD_joinRoom(this, in, current);
             }
             case 11:
             {
-                return _iceD_readChunk(this, in, current);
+                return _iceD_leaveRoom(this, in, current);
             }
             case 12:
             {
-                return _iceD_registerCallback(this, in, current);
+                return _iceD_listRooms(this, in, current);
             }
             case 13:
             {
-                return _iceD_sendPrivateMessage(this, in, current);
+                return _iceD_login(this, in, current);
             }
             case 14:
             {
-                return _iceD_startDownload(this, in, current);
+                return _iceD_logout(this, in, current);
             }
             case 15:
             {
-                return _iceD_startPrivateUpload(this, in, current);
+                return _iceD_postMessage(this, in, current);
             }
             case 16:
             {
-                return _iceD_startUpload(this, in, current);
+                return _iceD_readChunk(this, in, current);
             }
             case 17:
+            {
+                return _iceD_registerCallback(this, in, current);
+            }
+            case 18:
+            {
+                return _iceD_sendPrivateMessage(this, in, current);
+            }
+            case 19:
+            {
+                return _iceD_sendRoomMessage(this, in, current);
+            }
+            case 20:
+            {
+                return _iceD_startDownload(this, in, current);
+            }
+            case 21:
+            {
+                return _iceD_startPrivateUpload(this, in, current);
+            }
+            case 22:
+            {
+                return _iceD_startRoomDownload(this, in, current);
+            }
+            case 23:
+            {
+                return _iceD_startRoomUpload(this, in, current);
+            }
+            case 24:
+            {
+                return _iceD_startUpload(this, in, current);
+            }
+            case 25:
             {
                 return _iceD_writeChunk(this, in, current);
             }

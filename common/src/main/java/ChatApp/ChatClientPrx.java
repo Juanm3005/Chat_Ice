@@ -53,6 +53,44 @@ public interface ChatClientPrx extends com.zeroc.Ice.ObjectPrx
         return f;
     }
 
+    default void receiveRoomMessage(String room, ChatMessage msg)
+    {
+        receiveRoomMessage(room, msg, com.zeroc.Ice.ObjectPrx.noExplicitContext);
+    }
+
+    default void receiveRoomMessage(String room, ChatMessage msg, java.util.Map<String, String> context)
+    {
+        _iceI_receiveRoomMessageAsync(room, msg, context, true).waitForResponse();
+    }
+
+    default java.util.concurrent.CompletableFuture<Void> receiveRoomMessageAsync(String room, ChatMessage msg)
+    {
+        return _iceI_receiveRoomMessageAsync(room, msg, com.zeroc.Ice.ObjectPrx.noExplicitContext, false);
+    }
+
+    default java.util.concurrent.CompletableFuture<Void> receiveRoomMessageAsync(String room, ChatMessage msg, java.util.Map<String, String> context)
+    {
+        return _iceI_receiveRoomMessageAsync(room, msg, context, false);
+    }
+
+    /**
+     * @hidden
+     * @param iceP_room -
+     * @param iceP_msg -
+     * @param context -
+     * @param sync -
+     * @return -
+     **/
+    default com.zeroc.IceInternal.OutgoingAsync<Void> _iceI_receiveRoomMessageAsync(String iceP_room, ChatMessage iceP_msg, java.util.Map<String, String> context, boolean sync)
+    {
+        com.zeroc.IceInternal.OutgoingAsync<Void> f = new com.zeroc.IceInternal.OutgoingAsync<>(this, "receiveRoomMessage", null, sync, null);
+        f.invoke(false, context, null, ostr -> {
+                     ostr.writeString(iceP_room);
+                     ChatMessage.ice_write(ostr, iceP_msg);
+                 }, null);
+        return f;
+    }
+
     /**
      * Contacts the remote server to verify that the object implements this type.
      * Raises a local exception if a communication error occurs.

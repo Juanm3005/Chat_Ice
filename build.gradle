@@ -1,17 +1,5 @@
-allprojects {
-    repositories {
-        mavenCentral ()
-    }
-}
-
-
 group = 'org.example'
 version = '1.0-SNAPSHOT'
-
-repositories {
-    mavenCentral()
-}
-
 
 allprojects {
     repositories {
@@ -33,14 +21,17 @@ subprojects {
     }
 }
 
-subprojects {
-    apply plugin : 'java'
-    java {sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility= JavaVersion.VERSION_17
-    }
-    dependencies {
-// Runtime oficial de ZeroC Ice para Java
-        implementation 'com.zeroc:ice:3.7.10'
-    }
+// Tareas requeridas por la guía del taller evaluativo:
+// ./gradlew runServer
+// ./gradlew runClient
+tasks.register("runServer") {
+    description = "Ejecuta el servidor ZeroC Ice (modulo :server)"
+    group = "application"
+    dependsOn ':server:run'
 }
 
+tasks.register("runClient") {
+    description = "Ejecuta el cliente interactivo ZeroC Ice (modulo :client)"
+    group = "application"
+    dependsOn ':client:run'
+}

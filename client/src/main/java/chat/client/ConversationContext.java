@@ -3,7 +3,7 @@ package chat.client;
 // Indica en que conversacion esta el usuario: el chat general (inicio) o una ventana privada.
 // Lo comparten el hilo de consola y el hilo de callbacks, por eso los campos son volatile.
 public class ConversationContext {
-    public enum Mode { GENERAL, PRIVATE }
+    public enum Mode { GENERAL, PRIVATE, ROOM }
 
     private volatile Mode mode = Mode.GENERAL;
     private volatile String target = null;
@@ -11,6 +11,11 @@ public class ConversationContext {
     public synchronized void openPrivate(String nickname) {
         this.target = nickname;
         this.mode = Mode.PRIVATE;
+    }
+
+    public synchronized void openRoom(String room) {
+        this.target = room;
+        this.mode = Mode.ROOM;
     }
 
     public synchronized void backToGeneral() {
@@ -30,7 +35,18 @@ public class ConversationContext {
         return mode == Mode.PRIVATE && nickname.equals(target);
     }
 
-    public String prompt() {
-        return mode == Mode.PRIVATE ? "[privado con " + target + "]> " : "> ";
+    public synchronized boolean isRoom(String room) {
+        return mode == Mode.ROOM && room.equals(target);
+    }
+
+    public synchronized String prompt() {
+        switch (mode) {
+            case PRIVATE:
+                return "[privado con " + target + "]> ";
+            case ROOM:
+                return "[sala " + target + "]> ";
+            default:
+                return "> ";
+        }
     }
 }

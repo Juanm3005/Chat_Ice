@@ -19,6 +19,8 @@ public interface ChatClient extends com.zeroc.Ice.Object
 {
     void receivePrivateMessage(ChatMessage msg, com.zeroc.Ice.Current current);
 
+    void receiveRoomMessage(String room, ChatMessage msg, com.zeroc.Ice.Current current);
+
     /** @hidden */
     static final String[] _iceIds =
     {
@@ -61,6 +63,26 @@ public interface ChatClient extends com.zeroc.Ice.Object
         return inS.setResult(inS.writeEmptyParams());
     }
 
+    /**
+     * @hidden
+     * @param obj -
+     * @param inS -
+     * @param current -
+     * @return -
+    **/
+    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_receiveRoomMessage(ChatClient obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
+    {
+        com.zeroc.Ice.Object._iceCheckMode(null, current.mode);
+        com.zeroc.Ice.InputStream istr = inS.startReadParams();
+        String iceP_room;
+        ChatMessage iceP_msg;
+        iceP_room = istr.readString();
+        iceP_msg = ChatMessage.ice_read(istr);
+        inS.endReadParams();
+        obj.receiveRoomMessage(iceP_room, iceP_msg, current);
+        return inS.setResult(inS.writeEmptyParams());
+    }
+
     /** @hidden */
     final static String[] _iceOps =
     {
@@ -68,7 +90,8 @@ public interface ChatClient extends com.zeroc.Ice.Object
         "ice_ids",
         "ice_isA",
         "ice_ping",
-        "receivePrivateMessage"
+        "receivePrivateMessage",
+        "receiveRoomMessage"
     };
 
     /** @hidden */
@@ -103,6 +126,10 @@ public interface ChatClient extends com.zeroc.Ice.Object
             case 4:
             {
                 return _iceD_receivePrivateMessage(this, in, current);
+            }
+            case 5:
+            {
+                return _iceD_receiveRoomMessage(this, in, current);
             }
         }
 
