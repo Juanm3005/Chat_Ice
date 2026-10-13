@@ -421,6 +421,69 @@ public interface ChatRoomPrx extends com.zeroc.Ice.ObjectPrx
         ChatException.class
     };
 
+    default String startPrivateUpload(String fileName, String sender, String target)
+        throws ChatException
+    {
+        return startPrivateUpload(fileName, sender, target, com.zeroc.Ice.ObjectPrx.noExplicitContext);
+    }
+
+    default String startPrivateUpload(String fileName, String sender, String target, java.util.Map<String, String> context)
+        throws ChatException
+    {
+        try
+        {
+            return _iceI_startPrivateUploadAsync(fileName, sender, target, context, true).waitForResponseOrUserEx();
+        }
+        catch(ChatException ex)
+        {
+            throw ex;
+        }
+        catch(com.zeroc.Ice.UserException ex)
+        {
+            throw new com.zeroc.Ice.UnknownUserException(ex.ice_id(), ex);
+        }
+    }
+
+    default java.util.concurrent.CompletableFuture<java.lang.String> startPrivateUploadAsync(String fileName, String sender, String target)
+    {
+        return _iceI_startPrivateUploadAsync(fileName, sender, target, com.zeroc.Ice.ObjectPrx.noExplicitContext, false);
+    }
+
+    default java.util.concurrent.CompletableFuture<java.lang.String> startPrivateUploadAsync(String fileName, String sender, String target, java.util.Map<String, String> context)
+    {
+        return _iceI_startPrivateUploadAsync(fileName, sender, target, context, false);
+    }
+
+    /**
+     * @hidden
+     * @param iceP_fileName -
+     * @param iceP_sender -
+     * @param iceP_target -
+     * @param context -
+     * @param sync -
+     * @return -
+     **/
+    default com.zeroc.IceInternal.OutgoingAsync<java.lang.String> _iceI_startPrivateUploadAsync(String iceP_fileName, String iceP_sender, String iceP_target, java.util.Map<String, String> context, boolean sync)
+    {
+        com.zeroc.IceInternal.OutgoingAsync<java.lang.String> f = new com.zeroc.IceInternal.OutgoingAsync<>(this, "startPrivateUpload", null, sync, _iceE_startPrivateUpload);
+        f.invoke(true, context, null, ostr -> {
+                     ostr.writeString(iceP_fileName);
+                     ostr.writeString(iceP_sender);
+                     ostr.writeString(iceP_target);
+                 }, istr -> {
+                     String ret;
+                     ret = istr.readString();
+                     return ret;
+                 });
+        return f;
+    }
+
+    /** @hidden */
+    static final Class<?>[] _iceE_startPrivateUpload =
+    {
+        ChatException.class
+    };
+
     default void writeChunk(String sessionId, byte[] chunk)
     {
         writeChunk(sessionId, chunk, com.zeroc.Ice.ObjectPrx.noExplicitContext);

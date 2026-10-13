@@ -23,6 +23,10 @@ public class ChatRoomI implements ChatApp.ChatRoom {
     private final DateTimeFormatter timeFormat = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     private final File storageDir = new File("chat_files");
+    // Los archivos privados van en su propia carpeta para no pisar archivos de la sala
+    private final File privateStorageDir = new File(storageDir, "private");
+    // Archivo privado -> usuarios autorizados a descargarlo (remitente y destinatario)
+    private final Map<String, Set<String>> privateFiles = new ConcurrentHashMap<>();
     private final Map<String, UploadSession> activeUploads = new ConcurrentHashMap<>();
     private final Map<String, DownloadSession> activeDownloads = new ConcurrentHashMap<>();
 
@@ -152,20 +156,45 @@ public class ChatRoomI implements ChatApp.ChatRoom {
             throw new ChatException("Acceso denegado: El usuario debe iniciar sesion primero.");
         }
 
+        return openUpload(fileName, nickname, null, storageDir);
+    }
+
+    @Override
+    public synchronized String startPrivateUpload(String fileName, String sender, String target, Current current)
+            throws ChatException {
+        if (!onlineUsers.contains(sender)) {
+            throw new ChatException("Acceso denegado: El usuario debe iniciar sesion primero.");
+        }
+        if (target == null || target.trim().isEmpty()) {
+            throw new ChatException("Debe indicar el nickname del destinatario.");
+        }
+        String cleanTarget = target.trim();
+        if (cleanTarget.equals(sender)) {
+            throw new ChatException("No puedes enviarte un archivo privado a ti mismo.");
+        }
+        if (!onlineUsers.contains(cleanTarget) || !clientCallbacks.containsKey(cleanTarget)) {
+            throw new ChatException("El usuario '" + cleanTarget + "' no existe o se ha desconectado.");
+        }
+        return openUpload(fileName, sender, cleanTarget, privateStorageDir);
+    }
+
+    // Abre el archivo destino y registra la sesion de subida (target null = archivo de la sala)
+    private String openUpload(String fileName, String sender, String target, File dir) throws ChatException {
         try {
-            if (!storageDir.exists()) {
-                storageDir.mkdirs();
+            if (!dir.exists()) {
+                dir.mkdirs();
             }
 
             String safeName = new File(fileName).getName();
-            File destFile = new File(storageDir, safeName);
+            File destFile = new File(dir, safeName);
             FileOutputStream fos = new FileOutputStream(destFile);
 
             String sessionId = UUID.randomUUID().toString();
-            activeUploads.put(sessionId, new UploadSession(safeName, nickname, fos));
+            activeUploads.put(sessionId, new UploadSession(safeName, sender, fos, target));
 
+            String scope = target == null ? "" : " para " + target + " (privado)";
             System.out.println(
-                    "[UPLOAD] Iniciando subida de: " + safeName + " por " + nickname + " (Sesion: " + sessionId
+                    "[UPLOAD] Iniciando subida de: " + safeName + " por " + sender + scope + " (Sesion: " + sessionId
                             + ") (para descargar e archivo usa /download<nombre_del_archivo>)");
             return sessionId;
 
@@ -194,9 +223,19 @@ public class ChatRoomI implements ChatApp.ChatRoom {
                 session.outputStream.close();
                 System.out.println("[UPLOAD] Archivo completado: " + session.fileName);
 
-                // Notificar a toda la sala a través del historial de chat
                 String now = LocalTime.now().format(timeFormat);
                 long id = messageIdCounter.incrementAndGet();
+                if (session.target != null) {
+                    // Archivo privado: solo remitente y destinatario pueden descargarlo,
+                    // y solo el destinatario recibe el aviso (por callback, como un mensaje privado)
+                    privateFiles.put(session.fileName, Set.of(session.sender, session.target));
+                    notifyPrivateFile(session, new ChatMessage(id, session.sender,
+                            "te ha enviado el archivo: " + session.fileName
+                                    + " (usa /download " + session.fileName + ")", now));
+                    return;
+                }
+
+                // Notificar a toda la sala a través del historial de chat
                 ChatMessage notification = new ChatMessage(id, "SISTEMA",
                         session.sender + " ha compartido el archivo: " + session.fileName, now);
                 messageHistory.add(notification);
@@ -205,6 +244,21 @@ public class ChatRoomI implements ChatApp.ChatRoom {
                 System.err.println("[ERROR UPLOAD] Error cerrando el archivo: " + e.getMessage());
             }
         }
+    }
+
+    private void notifyPrivateFile(UploadSession session, ChatMessage msg) {
+        ChatClientPrx targetPrx = clientCallbacks.get(session.target);
+        if (targetPrx == null) {
+            System.err.println("[PRIVADO] " + session.target + " se desconecto antes de recibir "
+                    + session.fileName);
+            return;
+        }
+        targetPrx.receivePrivateMessageAsync(msg).whenComplete((ok, ex) -> {
+            if (ex != null) {
+                System.err.println("[PRIVADO] No se pudo notificar a " + session.target + ": " + ex);
+                removeUnreachableClient(session.target, targetPrx);
+            }
+        });
     }
 
     @Override
@@ -216,7 +270,11 @@ public class ChatRoomI implements ChatApp.ChatRoom {
                 throw new ChatException("Acceso denegado");
             }
             String safeName = new File(fileName).getName();
-            File destFile = new File(storageDir, safeName);
+            // Si el archivo fue compartido en privado con este usuario se sirve desde la
+            // carpeta privada; si no, desde la carpeta publica de la sala
+            Set<String> allowed = privateFiles.get(safeName);
+            File dir = allowed != null && allowed.contains(nickname) ? privateStorageDir : storageDir;
+            File destFile = new File(dir, safeName);
             FileInputStream fis = new FileInputStream(destFile);
 
             String sessionId = UUID.randomUUID().toString();
