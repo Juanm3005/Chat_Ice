@@ -52,6 +52,10 @@ module ChatApp {
 
         // Envir archivos
         string startUpload(string fileName, string nickname) throws ChatException;
+        // RF-02: subida de archivo dentro de un chat privado; solo sender y target pueden
+        // descargarlo y solo target recibe la notificacion (por callback). Reutiliza
+        // writeChunk/closeUpload con el sessionId retornado
+        string startPrivateUpload(string fileName, string sender, string target) throws ChatException;
         void writeChunk(string sessionId, ByteSeq chunk);
         void closeUpload(string sessionId);
         // Download

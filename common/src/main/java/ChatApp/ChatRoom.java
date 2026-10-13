@@ -38,6 +38,9 @@ public interface ChatRoom extends com.zeroc.Ice.Object
     String startUpload(String fileName, String nickname, com.zeroc.Ice.Current current)
         throws ChatException;
 
+    String startPrivateUpload(String fileName, String sender, String target, com.zeroc.Ice.Current current)
+        throws ChatException;
+
     void writeChunk(String sessionId, byte[] chunk, com.zeroc.Ice.Current current);
 
     void closeUpload(String sessionId, com.zeroc.Ice.Current current);
@@ -251,6 +254,33 @@ public interface ChatRoom extends com.zeroc.Ice.Object
      * @param inS -
      * @param current -
      * @return -
+     * @throws com.zeroc.Ice.UserException -
+    **/
+    static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_startPrivateUpload(ChatRoom obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
+        throws com.zeroc.Ice.UserException
+    {
+        com.zeroc.Ice.Object._iceCheckMode(null, current.mode);
+        com.zeroc.Ice.InputStream istr = inS.startReadParams();
+        String iceP_fileName;
+        String iceP_sender;
+        String iceP_target;
+        iceP_fileName = istr.readString();
+        iceP_sender = istr.readString();
+        iceP_target = istr.readString();
+        inS.endReadParams();
+        String ret = obj.startPrivateUpload(iceP_fileName, iceP_sender, iceP_target, current);
+        com.zeroc.Ice.OutputStream ostr = inS.startWriteParams();
+        ostr.writeString(ret);
+        inS.endWriteParams(ostr);
+        return inS.setResult(ostr);
+    }
+
+    /**
+     * @hidden
+     * @param obj -
+     * @param inS -
+     * @param current -
+     * @return -
     **/
     static java.util.concurrent.CompletionStage<com.zeroc.Ice.OutputStream> _iceD_writeChunk(ChatRoom obj, final com.zeroc.IceInternal.Incoming inS, com.zeroc.Ice.Current current)
     {
@@ -369,6 +399,7 @@ public interface ChatRoom extends com.zeroc.Ice.Object
         "registerCallback",
         "sendPrivateMessage",
         "startDownload",
+        "startPrivateUpload",
         "startUpload",
         "writeChunk"
     };
@@ -448,9 +479,13 @@ public interface ChatRoom extends com.zeroc.Ice.Object
             }
             case 15:
             {
-                return _iceD_startUpload(this, in, current);
+                return _iceD_startPrivateUpload(this, in, current);
             }
             case 16:
+            {
+                return _iceD_startUpload(this, in, current);
+            }
+            case 17:
             {
                 return _iceD_writeChunk(this, in, current);
             }

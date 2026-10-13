@@ -154,7 +154,10 @@ public class ClientMain {
                 } else if (input.startsWith("/upload")) {
                     String filePath = input.substring(8).trim();
                     if (!filePath.isEmpty()) {
-                        uploadFile(chatPrx, activeUser, filePath);
+                        // En una ventana privada el archivo solo se comparte con el destinatario
+                        String target = conversation.getMode() == ConversationContext.Mode.PRIVATE
+                                ? conversation.getTarget() : null;
+                        uploadFile(chatPrx, activeUser, target, filePath);
                     } else {
                         System.out.println(" || Debes usar la sigueinte estructura: /upload<ruta_del_archivo>");
                     }
@@ -189,7 +192,7 @@ public class ClientMain {
         System.out.println("  /users                   Lista los usuarios conectados");
         System.out.println("  /msg <usuario> [texto]   Abre un chat privado con <usuario> (y envia [texto] si se indica)");
         System.out.println("  /closew                  Cierra el chat privado y vuelve al chat general");
-        System.out.println("  /upload <ruta>           Sube un archivo al servidor y lo comparte con la sala");
+        System.out.println("  /upload <ruta>           Sube un archivo y lo comparte con la sala (o solo con el usuario del chat privado)");
         System.out.println("  /download <archivo>      Descarga un archivo compartido a la carpeta 'downloads'");
         System.out.println("  /call <usuario>          Inicia una llamada de voz con <usuario>");
         System.out.println("  /accept                  Contesta una llamada entrante");
@@ -273,7 +276,8 @@ public class ClientMain {
         System.out.print(conversation.prompt());
     }
 
-    private static void uploadFile(ChatRoomPrx chatPrx, String nickname, String pathStr) {
+    // target null = archivo para toda la sala; si no, archivo privado para ese usuario
+    private static void uploadFile(ChatRoomPrx chatPrx, String nickname, String target, String pathStr) {
         File file = new File(pathStr);
         if (!file.exists() || !file.isFile()) {
             System.err.println("[ERROR] El archivo no existe o no es valido: " + pathStr);
@@ -283,7 +287,9 @@ public class ClientMain {
         System.out.println(">>> Subiendo " + file.getName() + " (" + file.length() + " bytes)...");
 
         try (FileInputStream fis = new FileInputStream(file)) {
-            String sessionId = chatPrx.startUpload(file.getName(), nickname);
+            String sessionId = target == null
+                    ? chatPrx.startUpload(file.getName(), nickname)
+                    : chatPrx.startPrivateUpload(file.getName(), nickname, target);
 
             byte[] buffer = new byte[32 * 1024];
             int bytesRead;
@@ -293,7 +299,8 @@ public class ClientMain {
             }
 
             chatPrx.closeUpload(sessionId);
-            System.out.println(">>> Archivo '" + file.getName() + "' subido con exito.");
+            System.out.println(">>> Archivo '" + file.getName() + "' subido con exito"
+                    + (target == null ? "." : " y enviado en privado a " + target + "."));
 
         } catch (
 
